@@ -65,7 +65,7 @@ function BackupPage() {
       const payload = JSON.parse(decryptedJson) as { items: { item_type: string; favorite: boolean; tags: string[]; data: Record<string, unknown> }[] };
       let n = 0;
       for (const it of payload.items) {
-        const enc = await encryptVaultItem(vaultKey, it.data as Parameters<typeof encryptVaultItem>[1]);
+        const enc = await encryptVaultItem(vaultKey, it.data as unknown as Parameters<typeof encryptVaultItem>[1]);
         const { error } = await supabase.from("vault_items").insert({
           user_id: userId, item_type: it.item_type as never,
           favorite: !!it.favorite, tags: it.tags ?? [],

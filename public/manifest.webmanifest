@@ -1,0 +1,13 @@
+{
+  "name": "AMPass — Secure Password Vault",
+  "short_name": "AMPass",
+  "description": "Zero-knowledge password manager. Encrypted in your browser.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1224",
+  "theme_color": "#6366f1",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
