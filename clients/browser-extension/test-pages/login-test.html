@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMPass Extension Test - Login Form</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #f8fafc; color: #1e293b; padding: 40px; }
+    .container { max-width: 500px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    p { color: #64748b; margin-bottom: 24px; font-size: 0.9rem; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .card h2 { font-size: 1.1rem; margin-bottom: 16px; color: #334155; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.82rem; font-weight: 500; margin-bottom: 4px; color: #475569; }
+    input[type="text"], input[type="email"], input[type="password"] {
+      width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+      font-size: 14px; outline: none; transition: border-color 0.15s;
+    }
+    input:focus { border-color: #6366f1; }
+    button[type="submit"] {
+      width: 100%; padding: 11px; background: #6366f1; color: white; border: none;
+      border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
+    }
+    button[type="submit"]:hover { background: #4f46e5; }
+    .result { margin-top: 12px; padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 13px; color: #166534; display: none; }
+    .test-info { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; margin-bottom: 24px; font-size: 0.82rem; color: #1e40af; }
+    .test-info strong { display: block; margin-bottom: 4px; }
+    .section-divider { height: 1px; background: #e2e8f0; margin: 24px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AMPass Extension Test Page</h1>
+    <p>Use this page to test form detection, autofill, autosave, and password update prompts.</p>
+
+    <div class="test-info">
+      <strong>How to test:</strong>
+      1. Load the AMPass extension (unpacked) in Chrome/Edge<br>
+      2. Connect to your AMPass server and unlock the vault<br>
+      3. Add a vault item with URL "localhost" or this page's URL<br>
+      4. Reload this page — the extension should detect the login form<br>
+      5. Click the AMPass icon on the password field or use the popup to autofill<br>
+      6. Submit the form to test autosave prompt<br>
+      7. Change the password and submit again to test update prompt
+    </div>
+
+    <!-- Test 1: Standard Login Form -->
+    <div class="card">
+      <h2>Test 1: Standard Login Form</h2>
+      <form id="loginForm1" action="#" method="post">
+        <div class="form-group">
+          <label for="username1">Username or Email</label>
+          <input type="text" id="username1" name="username" placeholder="Enter username" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="password1">Password</label>
+          <input type="password" id="password1" name="password" placeholder="Enter password" autocomplete="current-password">
+        </div>
+        <button type="submit">Sign In</button>
+        <div class="result" id="result1"></div>
+      </form>
+    </div>
+
+    <!-- Test 2: Email + Password -->
+    <div class="card">
+      <h2>Test 2: Email Login</h2>
+      <form id="loginForm2" action="#" method="post">
+        <div class="form-group">
+          <label for="email2">Email Address</label>
+          <input type="email" id="email2" name="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="password2">Password</label>
+          <input type="password" id="password2" name="password" placeholder="Password" autocomplete="current-password">
+        </div>
+        <button type="submit">Log In</button>
+        <div class="result" id="result2"></div>
+      </form>
+    </div>
+
+    <!-- Test 3: Registration / Password Change -->
+    <div class="card">
+      <h2>Test 3: Registration (New Password)</h2>
+      <form id="regForm" action="#" method="post">
+        <div class="form-group">
+          <label for="regEmail">Email</label>
+          <input type="email" id="regEmail" name="email" placeholder="new@example.com">
+        </div>
+        <div class="form-group">
+          <label for="regPassword">New Password</label>
+          <input type="password" id="regPassword" name="password" placeholder="Create password" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label for="regConfirm">Confirm Password</label>
+          <input type="password" id="regConfirm" name="confirm_password" placeholder="Confirm password" autocomplete="new-password">
+        </div>
+        <button type="submit">Create Account</button>
+        <div class="result" id="result3"></div>
+      </form>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Test 4: Password Update Simulation -->
+    <div class="card">
+      <h2>Test 4: Change Password (Update Prompt)</h2>
+      <p style="font-size:0.82rem;color:#64748b;margin-bottom:12px;">
+        First autofill Test 1, then change the password here and submit. The extension should offer to update.
+      </p>
+      <form id="changeForm" action="#" method="post">
+        <div class="form-group">
+          <label for="changeUser">Username</label>
+          <input type="text" id="changeUser" name="username" placeholder="Your username" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="changeOld">Current Password</label>
+          <input type="password" id="changeOld" name="current_password" placeholder="Current password">
+        </div>
+        <div class="form-group">
+          <label for="changeNew">New Password</label>
+          <input type="password" id="changeNew" name="new_password" placeholder="New password" autocomplete="new-password">
+        </div>
+        <button type="submit">Update Password</button>
+        <div class="result" id="result4"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Prevent actual form submission, show result
+    document.querySelectorAll('form').forEach((form, i) => {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const data = new FormData(form);
+        const entries = Object.fromEntries(data.entries());
+        // Mask passwords for display
+        Object.keys(entries).forEach(k => {
+          if (k.includes('password')) entries[k] = '•'.repeat(entries[k].length) + ' (' + entries[k].length + ' chars)';
+        });
+        const result = document.getElementById('result' + (i + 1));
+        result.textContent = 'Form submitted: ' + JSON.stringify(entries, null, 2);
+        result.style.display = 'block';
+      });
+    });
+  </script>
+</body>
+</html>
