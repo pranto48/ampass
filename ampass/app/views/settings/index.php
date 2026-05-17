@@ -68,6 +68,13 @@ $error = Session::flash('error');
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                 </a>
+                <a href="<?= APP_URL ?>/settings/tokens" class="settings-link">
+                    <div class="settings-link-info">
+                        <span class="settings-link-title">Browser Extensions</span>
+                        <span class="settings-link-desc">Manage connected extension devices</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </a>
                 <a href="<?= APP_URL ?>/lock" class="settings-link">
                     <div class="settings-link-info">
                         <span class="settings-link-title">Lock Vault Now</span>

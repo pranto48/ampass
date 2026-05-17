@@ -1,0 +1,3 @@
+# SECURITY: Deny all direct access to docs directory
+Order deny,allow
+Deny from all

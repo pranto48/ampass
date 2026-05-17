@@ -35,6 +35,9 @@ RewriteRule ^app/ - [F,L]
 # Block access to database directory
 RewriteRule ^database/ - [F,L]
 
+# Block access to docs directory
+RewriteRule ^docs/ - [F,L]
+
 # SECURITY: Block access to install directory after installation
 # The installer checks INSTALL_LOCKED internally, but blocking at Apache level
 # provides defense-in-depth. Remove this rule only during initial setup.

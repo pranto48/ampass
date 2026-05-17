@@ -6,6 +6,8 @@
 require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/UserSecurity.php';
 require_once __DIR__ . '/../models/AuditLog.php';
+require_once __DIR__ . '/../models/ExtensionDevice.php';
+require_once __DIR__ . '/../models/ExtensionToken.php';
 
 class SettingsController {
 
@@ -123,5 +125,45 @@ class SettingsController {
         ];
 
         require __DIR__ . '/../views/settings/security.php';
+    }
+
+    // ================================================================
+    // EXTENSION DEVICE/TOKEN MANAGEMENT
+    // ================================================================
+
+    public function tokens(): void {
+        $userId = Session::getUserId();
+        $devices = ExtensionDevice::listByUser($userId);
+        $tokens = ExtensionToken::listByUser($userId);
+        $csrfToken = CSRF::generateToken();
+
+        $data = [
+            'devices' => $devices,
+            'tokens' => $tokens,
+            'csrfToken' => $csrfToken
+        ];
+
+        // Use the layout wrapper
+        require __DIR__ . '/../views/layouts/app.php';
+    }
+
+    public function revokeDevice(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . APP_URL . '/settings/tokens');
+            exit;
+        }
+        CSRF::validateOrFail();
+
+        $userId = Session::getUserId();
+        $deviceId = (int)($_POST['device_id'] ?? 0);
+
+        if ($deviceId) {
+            ExtensionDevice::revoke($deviceId, $userId);
+            AuditLog::log('extension_device_revoked', $userId, 'device', $deviceId);
+            Session::flash('success', 'Device revoked. The extension will need to log in again.');
+        }
+
+        header('Location: ' . APP_URL . '/settings/tokens');
+        exit;
     }
 }
