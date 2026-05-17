@@ -67,10 +67,11 @@ export async function generateVaultKey(): Promise<CryptoKey> {
 /** Encrypt a string with an AES-GCM key. Returns base64 ciphertext + iv. */
 export async function encryptString(key: CryptoKey, plaintext: string) {
   const iv = randomBytes(12);
+  const data = enc.encode(plaintext);
   const ct = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    enc.encode(plaintext),
+    data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
   );
   return { ciphertext: b64.encode(ct), iv: b64.encode(iv) };
 }
