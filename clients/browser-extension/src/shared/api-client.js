@@ -31,7 +31,17 @@ const ApiClient = {
     }
 
     const response = await fetch(url, config);
-    const data = await response.json();
+
+    // Handle non-JSON responses safely
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseErr) {
+      const error = new Error('Server returned invalid response');
+      error.code = 'PARSE_ERROR';
+      error.status = response.status;
+      throw error;
+    }
 
     if (!response.ok) {
       const error = new Error(data.error || 'Request failed');

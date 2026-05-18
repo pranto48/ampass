@@ -46,6 +46,23 @@ src-tauri/target/release/bundle/
 
 Replace placeholder icons in `src-tauri/icons/` with real PNG/ICO files before building for distribution.
 
+To regenerate icons from scratch, run:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/generate-icons.ps1
+```
+
+### Troubleshooting: RC2175 icon format error
+
+If you see:
+```
+RC2175: resource file src-tauri/icons/icon.ico is not in 3.00 format
+```
+
+This means `icon.ico` is not a valid Windows ICO file. Fix:
+1. Run `scripts/generate-icons.ps1` to regenerate all icons
+2. Or create a proper `.ico` file containing 16x16, 32x32, 48x48, 64x64, 128x128, and 256x256 sizes
+3. Tools: IcoFX, GIMP (export as .ico), or ImageMagick
+
 ## Code Signing
 
 For production distribution, sign the installer with a Windows code signing certificate. Set environment variables before building:

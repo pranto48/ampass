@@ -148,6 +148,12 @@
     if (e.key === 'Enter') els.btnLogin.click();
   });
 
+  // Reset connection button
+  document.getElementById('btnResetConn').addEventListener('click', async () => {
+    await sendMsg('RESET_EXTENSION');
+    showView('setup');
+  });
+
   // ===== Unlock =====
   els.btnUnlock.addEventListener('click', async () => {
     const password = els.unlockPassword.value;
@@ -166,8 +172,16 @@
         throw new Error(result.error || 'Invalid master password');
       }
     } catch (e) {
-      els.unlockError.textContent = e.message;
-      els.unlockError.style.display = 'block';
+      // If token is expired/invalid, clear and go back to login
+      if (e.message && (e.message.includes('expired') || e.message.includes('token') || e.message.includes('AUTH_REQUIRED'))) {
+        await sendMsg('RESET_EXTENSION');
+        els.unlockError.textContent = 'Session expired. Please login again.';
+        els.unlockError.style.display = 'block';
+        setTimeout(() => showView('login'), 1500);
+      } else {
+        els.unlockError.textContent = e.message;
+        els.unlockError.style.display = 'block';
+      }
     } finally {
       els.btnUnlock.disabled = false;
       els.btnUnlock.textContent = 'Unlock';

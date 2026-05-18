@@ -21,7 +21,7 @@ class SettingsController {
             'csrfToken' => $csrfToken
         ];
 
-        require __DIR__ . '/../views/settings/index.php';
+        require __DIR__ . '/../views/layouts/app.php';
     }
 
     public function profile(): void {
@@ -56,7 +56,7 @@ class SettingsController {
     public function changePassword(): void {
         $csrfToken = CSRF::generateToken();
         $data = ['csrfToken' => $csrfToken];
-        require __DIR__ . '/../views/settings/change-password.php';
+        require __DIR__ . '/../views/layouts/app.php';
     }
 
     public function updatePassword(): void {
@@ -124,7 +124,7 @@ class SettingsController {
             'csrfToken' => $csrfToken
         ];
 
-        require __DIR__ . '/../views/settings/security.php';
+        require __DIR__ . '/../views/layouts/app.php';
     }
 
     // ================================================================

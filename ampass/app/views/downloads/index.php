@@ -46,7 +46,10 @@
                     </div>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <p style="color:var(--text-muted);">Windows desktop app coming soon. Requirements: Windows 10/11 64-bit.</p>
+                    <p style="color:var(--text-muted);margin-bottom:8px;">No Windows installer uploaded yet. Requirements: Windows 10/11 64-bit.</p>
+                    <?php if (Session::isLoggedIn() && Session::isAdmin()): ?>
+                    <a href="<?= APP_URL ?>/admin/releases" class="btn btn-secondary btn-sm">Upload Windows Installer</a>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
@@ -55,14 +58,18 @@
         <div class="card" style="margin-bottom:16px;">
             <div class="card-header"><h2 class="card-title">🌐 Chrome / Edge Extension</h2></div>
             <div class="card-body">
-                <?php if (!empty($grouped['chrome_extension'])): ?>
-                    <?php $ext = $grouped['chrome_extension'][0]; ?>
+                <?php if (!empty($grouped['chrome_extension']) || !empty($grouped['edge_extension'])): ?>
+                    <?php foreach (array_merge($grouped['chrome_extension'] ?? [], $grouped['edge_extension'] ?? []) as $ext): ?>
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                        <div><strong><?= htmlspecialchars($ext['filename_original']) ?></strong> <span style="color:var(--text-muted);font-size:0.8rem;">v<?= htmlspecialchars($ext['version']) ?></span></div>
+                        <div><strong><?= htmlspecialchars($ext['filename_original']) ?></strong> <span style="color:var(--text-muted);font-size:0.8rem;">v<?= htmlspecialchars($ext['version']) ?> • <?= htmlspecialchars($ext['product_type'] === 'edge_extension' ? 'Edge' : 'Chrome') ?></span></div>
                         <a href="<?= APP_URL ?>/downloads/file/<?= $ext['id'] ?>" class="btn btn-primary btn-sm">Download ZIP</a>
                     </div>
+                    <?php endforeach; ?>
                 <?php else: ?>
-                    <p style="margin-bottom:8px;color:var(--text-muted);">No packaged extension available yet.</p>
+                    <p style="margin-bottom:8px;color:var(--text-muted);">No browser extension package uploaded yet.</p>
+                    <?php if (Session::isLoggedIn() && Session::isAdmin()): ?>
+                    <a href="<?= APP_URL ?>/admin/releases" class="btn btn-secondary btn-sm">Upload Browser Extension</a>
+                    <?php endif; ?>
                 <?php endif; ?>
                 <details style="margin-top:12px;">
                     <summary style="cursor:pointer;font-size:0.85rem;font-weight:500;">How to install (Developer Mode)</summary>

@@ -96,6 +96,16 @@
 - [ ] `GET /.htaccess` → 403 Forbidden
 - [ ] `GET /README.md` → 403 Forbidden
 - [ ] Static assets (`/public/css/app.css`, `/public/js/app.js`) → 200 OK
+- [ ] `/settings` loads with full AMPass layout (sidebar, topbar, CSS)
+- [ ] `/generator` loads with full AMPass layout
+- [ ] Sidebar shows "Web Accounts" link
+- [ ] Sidebar shows "Apps & Downloads" link
+- [ ] Admin sidebar shows "Release Downloads" link
+- [ ] `/downloads` page loads publicly
+- [ ] `/downloads` empty state is clear before files are uploaded
+- [ ] Extension stale token is cleared after DB reinstall
+- [ ] Extension shows login screen instead of "invalid token" error
+- [ ] Extension "Reset Connection" button works
 
 ## Security
 

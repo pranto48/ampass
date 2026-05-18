@@ -66,18 +66,47 @@ async function handleMessage(msg, sender) {
       return await copyToClipboard(msg.payload);
     case 'GET_SETTINGS':
       return { success: true, settings: await Storage.getSettings() };
+    case 'RESET_EXTENSION':
+      return await resetExtension();
     default:
       return { success: false, error: 'Unknown message type' };
   }
 }
 
+async function resetExtension() {
+  await Storage.clearSession();
+  await Storage.removeLocal('serverUrl');
+  cachedVaultItems = null;
+  return { success: true };
+}
+
 // ===== Core Operations =====
 
 async function getStatus() {
-  const authenticated = await Storage.isAuthenticated();
-  const unlocked = await Storage.isVaultUnlocked();
   const serverUrl = await Storage.getServerUrl();
-  return { success: true, authenticated, unlocked, serverUrl, configured: !!serverUrl };
+  const configured = !!serverUrl;
+  let authenticated = await Storage.isAuthenticated();
+  const unlocked = await Storage.isVaultUnlocked();
+
+  // Verify token with server if we think we're authenticated
+  if (authenticated && configured) {
+    try {
+      ApiClient.serverUrl = serverUrl;
+      ApiClient.token = await Storage.getToken();
+      await ApiClient.getSession(); // Will throw if token is invalid/expired
+    } catch (e) {
+      if (e.code === 'AUTH_REQUIRED' || e.status === 401) {
+        // Token is stale — clear it
+        await Storage.removeSession('authToken');
+        await Storage.removeSession('derivationParams');
+        await Storage.removeSession('vaultKeyHex');
+        await Storage.removeSession('vaultItems');
+        authenticated = false;
+      }
+    }
+  }
+
+  return { success: true, authenticated, unlocked, serverUrl, configured };
 }
 
 async function login(payload) {
