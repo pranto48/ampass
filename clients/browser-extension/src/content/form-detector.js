@@ -123,33 +123,55 @@
   }
 
   /**
-   * Add a small AMPass icon to a field
+   * Add a small AMPass icon overlay near a password field.
+   * Uses fixed positioning to avoid CSS conflicts with the page.
    */
   function addFieldIndicator(field) {
-    if (field.parentElement.querySelector('.ampass-field-icon')) return;
+    if (field.hasAttribute('data-ampass-icon-added')) return;
+    field.setAttribute('data-ampass-icon-added', 'true');
 
     const icon = document.createElement('div');
     icon.className = 'ampass-field-icon';
     icon.title = 'AMPass - Click to autofill';
     icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="#6366f1"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg>`;
+    icon.style.cssText = 'position:fixed;cursor:pointer;z-index:2147483646;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;opacity:0.7;transition:opacity 0.2s;pointer-events:auto;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.2);padding:2px;';
 
-    // Position the icon inside the field
-    const wrapper = field.parentElement;
-    if (wrapper) {
-      wrapper.style.position = wrapper.style.position || 'relative';
-      icon.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;z-index:99999;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:3px;opacity:0.8;transition:opacity 0.2s;';
-      icon.addEventListener('mouseenter', () => icon.style.opacity = '1');
-      icon.addEventListener('mouseleave', () => icon.style.opacity = '0.8');
-      icon.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // Request autofill from popup
-        chrome.runtime.sendMessage({ type: 'GET_MATCHES', payload: { url: window.location.href } });
-        // Open popup
-        chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
-      });
-      wrapper.appendChild(icon);
+    icon.addEventListener('mouseenter', () => icon.style.opacity = '1');
+    icon.addEventListener('mouseleave', () => icon.style.opacity = '0.7');
+    icon.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'GET_MATCHES', payload: { url: window.location.href } });
+    });
+
+    document.body.appendChild(icon);
+
+    // Position the icon at the right edge of the field
+    function positionIcon() {
+      const rect = field.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        icon.style.display = 'none';
+        return;
+      }
+      icon.style.display = 'flex';
+      icon.style.top = (rect.top + (rect.height - 22) / 2) + 'px';
+      icon.style.left = (rect.right - 26) + 'px';
     }
+
+    positionIcon();
+
+    // Reposition on scroll/resize
+    let rafId = null;
+    function scheduleReposition() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => { positionIcon(); rafId = null; });
+    }
+    window.addEventListener('scroll', scheduleReposition, { passive: true });
+    window.addEventListener('resize', scheduleReposition, { passive: true });
+
+    // Show only when field is visible and focused or hovered
+    field.addEventListener('focus', () => { icon.style.opacity = '0.9'; positionIcon(); });
+    field.addEventListener('blur', () => { icon.style.opacity = '0.7'; });
   }
 
   /**

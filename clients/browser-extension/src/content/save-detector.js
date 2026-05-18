@@ -63,12 +63,41 @@
   }
 
   /**
-   * Handle form submit event
+   * Handle form submit event.
+   * Captures credentials and shows save prompt BEFORE navigation.
+   * Briefly prevents default to give user time to see the prompt.
    */
   function onFormSubmit(e) {
     const form = e.target;
     if (!(form instanceof HTMLFormElement)) return;
-    captureAndQueue(form);
+
+    // Skip if this is our own re-submission after save prompt
+    if (form.getAttribute('data-ampass-submitting') === 'true') {
+      form.removeAttribute('data-ampass-submitting');
+      return;
+    }
+
+    const data = captureSubmission(form);
+    if (!data) return; // No password field or empty
+
+    // Don't capture if it was autofilled by us
+    const pwField = form.querySelector('input[type="password"][data-ampass-filled]');
+    if (pwField) return;
+
+    // Store for the service worker (survives page navigation)
+    lastSubmittedData = data;
+    lastCaptureAt = Date.now();
+    chrome.runtime.sendMessage({
+      type: 'CAPTURE_SAVE_CANDIDATE',
+      payload: { data }
+    }).catch(() => {});
+
+    // Prevent form submission to show prompt on THIS page
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Show the save prompt with a "continue" action that re-submits the form
+    showSavePromptWithContinue(form, data);
   }
 
   /**
@@ -172,6 +201,96 @@
   }
 
   /**
+   * Show save prompt that pauses form submission.
+   * After user decides, re-submits the form.
+   */
+  function showSavePromptWithContinue(form, data) {
+    const existing = document.getElementById('ampass-save-prompt');
+    if (existing) existing.remove();
+
+    const prompt = document.createElement('div');
+    prompt.id = 'ampass-save-prompt';
+    prompt.style.cssText = `
+      position: fixed; top: 12px; right: 12px; z-index: 2147483647;
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 16px 20px; max-width: 360px; box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #fafafa; font-size: 14px; line-height: 1.5;
+      animation: ampassSlideIn 0.3s ease;
+    `;
+
+    if (!document.getElementById('ampass-styles')) {
+      const style = document.createElement('style');
+      style.id = 'ampass-styles';
+      style.textContent = '@keyframes ampassSlideIn{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}';
+      document.head.appendChild(style);
+    }
+
+    const desc = `Save login for <strong>${Security.escapeHtml(data.username)}</strong> on ${Security.escapeHtml(data.domain)}?`;
+
+    prompt.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="#6366f1"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg>
+        <span style="font-weight:600;font-size:15px;">Save login?</span>
+      </div>
+      <p style="color:#a1a1aa;margin-bottom:14px;">${desc}</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="ampass-save-skip" style="padding:7px 14px;border-radius:6px;border:1px solid #27272a;background:#1f1f23;color:#a1a1aa;cursor:pointer;font-size:13px;">Not now</button>
+        <button id="ampass-save-yes" style="padding:7px 14px;border-radius:6px;border:none;background:#6366f1;color:white;cursor:pointer;font-size:13px;font-weight:500;">Save & Continue</button>
+      </div>
+    `;
+
+    document.body.appendChild(prompt);
+
+    function continueSubmit() {
+      prompt.remove();
+      // Re-submit the form programmatically (bypasses our listener since we use requestSubmit)
+      try {
+        form.setAttribute('data-ampass-submitting', 'true');
+        if (form.requestSubmit) {
+          form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      } catch (e) {
+        form.submit();
+      }
+    }
+
+    prompt.querySelector('#ampass-save-skip').addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
+      continueSubmit();
+    });
+
+    prompt.querySelector('#ampass-save-yes').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'SAVE_ITEM',
+        payload: {
+          itemData: {
+            title: data.title,
+            url: data.url,
+            username: data.username,
+            password: data.password
+          }
+        }
+      }).then(() => {
+        chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
+        continueSubmit();
+      }).catch(() => {
+        continueSubmit();
+      });
+    });
+
+    // Auto-continue after 30 seconds if user doesn't interact
+    setTimeout(() => {
+      if (document.getElementById('ampass-save-prompt')) {
+        chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
+        continueSubmit();
+      }
+    }, 30000);
+  }
+
+  /**
    * Show save/update prompt to user
    */
   function showSavePrompt(action, data, existingItem = null) {
@@ -257,13 +376,13 @@
       data.username = null;
     });
 
-    // Auto-dismiss after 15 seconds
+    // Auto-dismiss after 60 seconds (gives user plenty of time)
     setTimeout(() => {
       if (document.getElementById('ampass-save-prompt')) {
         chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
         prompt.remove();
       }
-    }, 15000);
+    }, 60000);
   }
 
   // ===== Event Listeners =====
