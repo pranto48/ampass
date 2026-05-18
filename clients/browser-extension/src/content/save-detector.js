@@ -65,7 +65,7 @@
   /**
    * Handle form submit event.
    * Captures credentials and shows save prompt BEFORE navigation.
-   * Briefly prevents default to give user time to see the prompt.
+   * Only intercepts if the extension vault is unlocked (can actually save).
    */
   function onFormSubmit(e) {
     const form = e.target;
@@ -84,7 +84,7 @@
     const pwField = form.querySelector('input[type="password"][data-ampass-filled]');
     if (pwField) return;
 
-    // Store for the service worker (survives page navigation)
+    // Store for the service worker (survives page navigation as fallback)
     lastSubmittedData = data;
     lastCaptureAt = Date.now();
     chrome.runtime.sendMessage({
@@ -92,12 +92,33 @@
       payload: { data }
     }).catch(() => {});
 
-    // Prevent form submission to show prompt on THIS page
+    // Check if vault is unlocked before intercepting the form
+    // If vault is locked, just let the form submit normally (credentials are queued for later)
+    chrome.runtime.sendMessage({ type: 'GET_STATUS' }).then(status => {
+      if (status && status.success && status.unlocked) {
+        // Don't intercept the AMPass server's own login/register/unlock pages
+        const serverUrl = status.serverUrl || '';
+        if (serverUrl && window.location.href.startsWith(serverUrl)) {
+          form.setAttribute('data-ampass-submitting', 'true');
+          if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+          return;
+        }
+        // Vault is unlocked — show save prompt
+        showSavePromptWithContinue(form, data);
+      } else {
+        // Vault is locked — can't save now, just submit the form
+        form.setAttribute('data-ampass-submitting', 'true');
+        if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+      }
+    }).catch(() => {
+      // On error, just submit the form normally
+      form.setAttribute('data-ampass-submitting', 'true');
+      if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+    });
+
+    // Prevent form submission while we check vault status
     e.preventDefault();
     e.stopPropagation();
-
-    // Show the save prompt with a "continue" action that re-submits the form
-    showSavePromptWithContinue(form, data);
   }
 
   /**

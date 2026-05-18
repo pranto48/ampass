@@ -171,16 +171,15 @@ async function getStatus() {
     try {
       ApiClient.serverUrl = serverUrl;
       ApiClient.token = await Storage.getToken();
-      await ApiClient.getSession(); // Will throw if token is invalid/expired
+      await ApiClient.getSession();
     } catch (e) {
-      if (e.code === 'AUTH_REQUIRED' || e.status === 401) {
-        // Token is stale — clear it
-        await Storage.removeSession('authToken');
-        await Storage.removeSession('derivationParams');
-        await Storage.removeSession('vaultKeyHex');
-        await Storage.removeSession('vaultItems');
-        authenticated = false;
-      }
+      // Any error means token is invalid — clear it
+      // This handles: AUTH_REQUIRED, AUTH_HEADER_MISSING, PARSE_ERROR, network errors
+      await Storage.removeSession('authToken');
+      await Storage.removeSession('derivationParams');
+      await Storage.removeSession('vaultKeyHex');
+      await Storage.removeSession('vaultItems');
+      authenticated = false;
     }
   }
 

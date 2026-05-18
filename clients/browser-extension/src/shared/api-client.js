@@ -30,12 +30,21 @@ const ApiClient = {
       config.body = JSON.stringify(options.body);
     }
 
-    const response = await fetch(url, config);
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (networkErr) {
+      const error = new Error('Cannot connect to server');
+      error.code = 'NETWORK_ERROR';
+      error.status = 0;
+      throw error;
+    }
 
-    // Handle non-JSON responses safely
+    // Handle non-JSON responses safely (PHP errors, HTML redirects, etc.)
     let data;
     try {
-      data = await response.json();
+      const text = await response.text();
+      data = JSON.parse(text);
     } catch (parseErr) {
       const error = new Error('Server returned invalid response');
       error.code = 'PARSE_ERROR';
