@@ -30,11 +30,27 @@ class ExtensionApiController {
 
     /**
      * Authenticate via bearer token (called by endpoints that require auth)
+     * SECURITY: Reads Authorization header from multiple sources to handle
+     * Apache/CGI/FastCGI environments that may strip or rename the header.
      */
     private function authenticate(): bool {
         if ($this->isAuthenticated) return true;
 
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        // Read Authorization header from multiple possible sources
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION']
+            ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+            ?? '';
+
+        // Fallback: apache_request_headers() for mod_php
+        if (empty($authHeader) && function_exists('apache_request_headers')) {
+            $headers = apache_request_headers();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        }
+
+        if (empty($authHeader)) {
+            return false;
+        }
+
         if (!preg_match('/^Bearer\s+([a-f0-9]{64})$/i', $authHeader, $matches)) {
             return false;
         }
@@ -59,7 +75,27 @@ class ExtensionApiController {
         if (!$this->requireHTTPS()) return false;
         if (!$this->authenticate()) {
             http_response_code(401);
-            echo json_encode(['error' => 'Invalid or expired token', 'code' => 'AUTH_REQUIRED']);
+
+            // Determine if header is missing vs token invalid
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION']
+                ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+                ?? '';
+            if (empty($authHeader) && function_exists('apache_request_headers')) {
+                $headers = apache_request_headers();
+                $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            }
+
+            if (empty($authHeader)) {
+                echo json_encode([
+                    'error' => 'Authorization header missing. Check Apache .htaccess bearer token forwarding.',
+                    'code' => 'AUTH_HEADER_MISSING'
+                ]);
+            } else {
+                echo json_encode([
+                    'error' => 'Invalid or expired token',
+                    'code' => 'AUTH_REQUIRED'
+                ]);
+            }
             return false;
         }
         return true;
@@ -128,6 +164,45 @@ class ExtensionApiController {
             'authenticated' => $authenticated,
             'https' => Security::isHTTPS(),
             'server_time' => date('c')
+        ]);
+    }
+
+    /**
+     * GET /api/extension/debug-auth
+     * Diagnostic endpoint for bearer token header issues.
+     * Only available on localhost or to authenticated admins.
+     * SECURITY: Never returns the actual token value.
+     */
+    public function debugAuth(): void {
+        // Only allow on localhost or if user is admin via session
+        if (!Security::isLocalhost() && !(Session::isLoggedIn() && Session::isAdmin())) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Only available on localhost or for admins']);
+            return;
+        }
+
+        $httpAuth = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
+        $redirectAuth = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
+        $apacheAuth = null;
+        if (function_exists('apache_request_headers')) {
+            $headers = apache_request_headers();
+            $apacheAuth = $headers['Authorization'] ?? $headers['authorization'] ?? null;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'diagnostics' => [
+                'HTTP_AUTHORIZATION_present' => $httpAuth !== null,
+                'HTTP_AUTHORIZATION_length' => $httpAuth ? strlen($httpAuth) : 0,
+                'REDIRECT_HTTP_AUTHORIZATION_present' => $redirectAuth !== null,
+                'REDIRECT_HTTP_AUTHORIZATION_length' => $redirectAuth ? strlen($redirectAuth) : 0,
+                'apache_request_headers_available' => function_exists('apache_request_headers'),
+                'apache_Authorization_present' => $apacheAuth !== null,
+                'apache_Authorization_length' => $apacheAuth ? strlen($apacheAuth) : 0,
+                'starts_with_Bearer' => (bool)preg_match('/^Bearer\s/i', $httpAuth ?? $redirectAuth ?? $apacheAuth ?? ''),
+                'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+                'sapi_name' => php_sapi_name()
+            ]
         ]);
     }
 

@@ -4,6 +4,18 @@
 RewriteEngine On
 
 # ============================================================
+# AUTHORIZATION HEADER FORWARDING
+# Required for browser extension and desktop app bearer token authentication.
+# Apache/CGI may strip the Authorization header; these rules preserve it.
+# ============================================================
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# ============================================================
 # HTTPS ENFORCEMENT (UNCOMMENT FOR PRODUCTION - REQUIRED!)
 # ============================================================
 # RewriteCond %{HTTPS} off

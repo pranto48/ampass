@@ -172,12 +172,12 @@
         throw new Error(result.error || 'Invalid master password');
       }
     } catch (e) {
-      // If token is expired/invalid, clear and go back to login
-      if (e.message && (e.message.includes('expired') || e.message.includes('token') || e.message.includes('AUTH_REQUIRED'))) {
+      // If token is expired/invalid or header missing, clear and go back to login
+      if (e.message && (e.message.includes('expired') || e.message.includes('token') || e.message.includes('AUTH_REQUIRED') || e.message.includes('AUTH_HEADER_MISSING') || e.message.includes('Authorization header'))) {
         await sendMsg('RESET_EXTENSION');
-        els.unlockError.textContent = 'Session expired. Please login again.';
+        els.unlockError.textContent = 'Session expired or server cannot read auth token. Please login again.';
         els.unlockError.style.display = 'block';
-        setTimeout(() => showView('login'), 1500);
+        setTimeout(() => showView('login'), 2000);
       } else {
         els.unlockError.textContent = e.message;
         els.unlockError.style.display = 'block';

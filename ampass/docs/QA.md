@@ -123,3 +123,6 @@
 - [ ] Inactive release returns 404 on public download
 - [ ] Public /downloads page shows only active releases
 - [ ] Copy download URL button works in admin releases page
+- [ ] Bearer token Authorization header works on XAMPP Apache
+- [ ] Bearer token Authorization header works on cPanel
+- [ ] /api/extension/debug-auth returns diagnostics on localhost

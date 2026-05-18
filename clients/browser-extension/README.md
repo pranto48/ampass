@@ -59,6 +59,30 @@ Before the extension can connect, ensure:
 ## Security Limitations
 
 - **Vault key in session storage**: The vault key is stored in `chrome.storage.session` which is cleared when the browser closes. If the browser process is compromised, the key could be extracted.
+
+## Troubleshooting
+
+### "Invalid or expired token" or "Session expired" after login
+
+This usually means Apache is stripping the `Authorization` header before PHP can read it.
+
+**Fix:**
+1. Ensure `ampass/.htaccess` contains the Authorization header forwarding rules (added automatically in latest version)
+2. Restart Apache after .htaccess changes
+3. Test with: `http://localhost/ampass/api/extension/debug-auth` (shows whether the header arrives)
+4. If using cPanel with FastCGI/CGI, the `SetEnvIf` and `RewriteRule` in .htaccess should handle it
+
+**Quick recovery:**
+1. Click "Reset Connection" in the extension login screen
+2. Re-enter your server URL
+3. Login again
+
+### Extension shows stale data after database reset
+
+If you reinstalled AMPass or reset the database:
+1. Click "Reset Connection" in the extension
+2. Login with your new credentials
+3. The extension will detect the old token is invalid and clear it automatically
 - **Content script injection**: Content scripts run in the page context. A malicious page could potentially detect the AMPass icon or interfere with autofill.
 - **No phishing protection**: The extension does basic domain matching but does not have a comprehensive phishing database.
 - **HTTP warning**: Autofill is disabled on HTTP pages by default. Users can override this in settings (not recommended).
