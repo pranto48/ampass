@@ -34,8 +34,8 @@ const ApiClient = {
     try {
       response = await fetch(url, config);
     } catch (networkErr) {
-      const error = new Error('Cannot connect to server');
-      error.code = 'NETWORK_ERROR';
+      const error = new Error('AMPass server is offline or unreachable');
+      error.code = 'NETWORK_OFFLINE';
       error.status = 0;
       throw error;
     }
@@ -54,7 +54,7 @@ const ApiClient = {
 
     if (!response.ok) {
       const error = new Error(data.error || 'Request failed');
-      error.code = data.code || 'UNKNOWN';
+      error.code = data.code || (response.status >= 500 ? 'SERVER_ERROR' : 'UNKNOWN');
       error.status = response.status;
       throw error;
     }

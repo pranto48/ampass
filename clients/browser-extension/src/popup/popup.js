@@ -77,16 +77,28 @@
     if (!status.configured) {
       showView('setup');
     } else if (!status.authenticated) {
-      showView('login');
+      // If offline but has cached data, show unlock instead of login
+      if (!status.online && status.offlineAvailable) {
+        showView('unlock');
+        showStatus('⚡ Offline Mode — enter master password to access cached vault', 'warning');
+      } else {
+        showView('login');
+      }
     } else if (!status.unlocked) {
       showView('unlock');
+      if (!status.online) {
+        showStatus('⚡ Offline Mode — using encrypted cached vault', 'warning');
+      }
     } else {
       showView('vault');
       await loadVault();
+      if (!status.online) {
+        showStatus('⚡ Offline — read-only mode (autofill & copy available)', 'warning');
+      }
     }
 
-    // Check HTTPS
-    if (status.serverUrl && !status.serverUrl.startsWith('https://') && !status.serverUrl.includes('localhost')) {
+    // Check HTTPS (only when online)
+    if (status.online && status.serverUrl && !status.serverUrl.startsWith('https://') && !status.serverUrl.includes('localhost')) {
       showStatus('⚠️ Server is not using HTTPS. Your data may be at risk.', 'warning');
     }
 
@@ -127,7 +139,8 @@
 
     try {
       const serverUrl = await Storage.getServerUrl();
-      const result = await sendMsg('LOGIN', { serverUrl, username, password });
+      const trustBrowser = document.getElementById('loginTrust')?.checked || false;
+      const result = await sendMsg('LOGIN', { serverUrl, username, password, trustBrowser });
       if (result.success) {
         showView('unlock');
       } else {
@@ -168,6 +181,9 @@
       if (result.success) {
         showView('vault');
         await loadVault();
+        if (result.offline) {
+          showStatus('⚡ Offline — read-only mode (autofill & copy available)', 'warning');
+        }
       } else {
         throw new Error(result.error || 'Invalid master password');
       }
