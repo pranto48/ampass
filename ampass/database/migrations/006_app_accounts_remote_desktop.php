@@ -10,9 +10,19 @@
  * SECURITY: All sensitive data remains inside encrypted_data (client-side encrypted).
  *
  * This file must return true on success or throw an Exception on failure.
+ *
+ * The migration runner provides $pdo (from installer) or Database class (from updater).
  */
 
-$pdo = Database::getInstance();
+// Get PDO instance — works in both installer context (raw $pdo) and updater context (Database class)
+if (!isset($pdo)) {
+    if (class_exists('Database')) {
+        $pdo = Database::getInstance();
+    } else {
+        throw new \Exception('Migration 006: No PDO connection available');
+    }
+}
+
 $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn();
 
 // Step 1: ALTER item_type enum to include new types.

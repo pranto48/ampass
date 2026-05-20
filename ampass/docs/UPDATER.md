@@ -90,3 +90,40 @@ If update or migration fails:
 - Check Admin → Updates for error details
 - Run migrations manually via phpMyAdmin if needed
 - Failed migrations are not marked as applied (safe to retry)
+
+## Migration System
+
+AMPass supports two migration formats:
+
+### SQL Migrations (`.sql` files)
+- Executed via `PDO::exec()`
+- Good for simple DDL: CREATE TABLE, ALTER TABLE, INSERT
+- **Limitation:** `DELIMITER` and `CREATE PROCEDURE` are NOT supported (these are mysql CLI commands, not SQL)
+
+### PHP Migrations (`.php` files)
+- For complex/conditional logic that SQL alone cannot handle
+- Can query `INFORMATION_SCHEMA` to check if columns/indexes exist before adding
+- Must `return true` on success or throw an Exception on failure
+- Has access to `Database::getInstance()` (PDO)
+
+### Precedence
+- If both `006_example.sql` and `006_example.php` exist, the `.php` file takes precedence
+- The runner checks `schema_migrations` for both `.sql` and `.php` variants to avoid double-applying
+
+### Writing a PHP Migration
+
+```php
+<?php
+// database/migrations/006_example.php
+$pdo = Database::getInstance();
+$dbName = $pdo->query("SELECT DATABASE()")->fetchColumn();
+
+// Check if column exists before adding
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'my_table' AND COLUMN_NAME = 'my_column'");
+$stmt->execute([$dbName]);
+if ((int)$stmt->fetchColumn() === 0) {
+    $pdo->exec("ALTER TABLE my_table ADD COLUMN my_column VARCHAR(64) NULL");
+}
+
+return true; // Required!
+```

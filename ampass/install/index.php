@@ -315,6 +315,7 @@ function performInstallation(array $data): string {
 /**
  * Run all migration files in database/migrations/ that haven't been run yet.
  * Creates a schema_migrations table to track which migrations have been applied.
+ * Supports both .sql and .php migrations. PHP takes precedence if both exist.
  */
 function runMigrations(PDO $pdo): string {
     // Create migrations tracking table
@@ -331,39 +332,63 @@ function runMigrations(PDO $pdo): string {
         return ''; // No migrations directory — that's fine
     }
 
-    // Get all .sql files sorted by filename
-    $files = glob($migrationsDir . '/*.sql');
-    if (empty($files)) {
-        return ''; // No migration files
+    // Collect all migration files, PHP takes precedence over SQL
+    $sqlFiles = glob($migrationsDir . '/*.sql') ?: [];
+    $phpFiles = glob($migrationsDir . '/*.php') ?: [];
+
+    $migrations = [];
+    foreach ($sqlFiles as $file) {
+        $base = pathinfo($file, PATHINFO_FILENAME);
+        $migrations[$base] = ['file' => $file, 'type' => 'sql', 'filename' => basename($file)];
     }
-    sort($files); // Alphabetical order (001_, 002_, etc.)
+    foreach ($phpFiles as $file) {
+        $base = pathinfo($file, PATHINFO_FILENAME);
+        $migrations[$base] = ['file' => $file, 'type' => 'php', 'filename' => basename($file)];
+    }
+    ksort($migrations);
 
-    foreach ($files as $file) {
-        $filename = basename($file);
+    foreach ($migrations as $base => $migration) {
+        $filename = $migration['filename'];
 
-        // Check if already applied
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM schema_migrations WHERE filename = ?");
-        $stmt->execute([$filename]);
+        // Check if any variant is already applied
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM schema_migrations WHERE filename IN (?, ?, ?)");
+        $stmt->execute([$filename, $base . '.sql', $base . '.php']);
         if ($stmt->fetchColumn() > 0) {
             continue; // Already applied
         }
 
         // Run the migration
         try {
-            $sql = file_get_contents($file);
-            if (empty(trim($sql))) continue;
-
-            $pdo->exec($sql);
+            if ($migration['type'] === 'php') {
+                // PHP migration: include the file, it must return true
+                // Make $pdo available via Database class (already loaded by installer)
+                $migrationResult = require $migration['file'];
+                if ($migrationResult !== true) {
+                    throw new \Exception("PHP migration did not return true");
+                }
+            } else {
+                // SQL migration
+                $sql = file_get_contents($migration['file']);
+                if (empty(trim($sql))) continue;
+                $pdo->exec($sql);
+            }
 
             // Record as applied
             $stmt = $pdo->prepare("INSERT INTO schema_migrations (filename) VALUES (?)");
             $stmt->execute([$filename]);
         } catch (PDOException $e) {
             // Non-fatal: log but continue (tables may already exist from schema.sql)
-            // The CREATE TABLE IF NOT EXISTS in migrations handles this gracefully
             error_log("AMPass migration warning ({$filename}): " . $e->getMessage());
 
             // Still record it to avoid re-running
+            try {
+                $stmt = $pdo->prepare("INSERT IGNORE INTO schema_migrations (filename) VALUES (?)");
+                $stmt->execute([$filename]);
+            } catch (PDOException $e2) {
+                // Ignore
+            }
+        } catch (\Exception $e) {
+            error_log("AMPass migration warning ({$filename}): " . $e->getMessage());
             try {
                 $stmt = $pdo->prepare("INSERT IGNORE INTO schema_migrations (filename) VALUES (?)");
                 $stmt->execute([$filename]);

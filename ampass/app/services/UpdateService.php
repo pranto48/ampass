@@ -611,12 +611,29 @@ class UpdateService {
     public static function getPendingMigrations(): array {
         $migrationsDir = __DIR__ . '/../../database/migrations';
         if (!is_dir($migrationsDir)) return [];
-        $files = glob($migrationsDir . '/*.sql');
-        sort($files);
+
+        // Collect all migration files, PHP takes precedence over SQL
+        $sqlFiles = glob($migrationsDir . '/*.sql') ?: [];
+        $phpFiles = glob($migrationsDir . '/*.php') ?: [];
+
+        $migrations = [];
+        foreach ($sqlFiles as $file) {
+            $base = pathinfo($file, PATHINFO_FILENAME);
+            $migrations[$base] = basename($file);
+        }
+        foreach ($phpFiles as $file) {
+            $base = pathinfo($file, PATHINFO_FILENAME);
+            $migrations[$base] = basename($file); // PHP overrides SQL
+        }
+        ksort($migrations);
+
         $pending = [];
-        foreach ($files as $file) {
-            $filename = basename($file);
-            $applied = Database::fetchOne("SELECT COUNT(*) as cnt FROM schema_migrations WHERE filename = ?", [$filename]);
+        foreach ($migrations as $base => $filename) {
+            // Check if any variant is already applied
+            $applied = Database::fetchOne(
+                "SELECT COUNT(*) as cnt FROM schema_migrations WHERE filename IN (?, ?, ?)",
+                [$filename, $base . '.sql', $base . '.php']
+            );
             if (($applied['cnt'] ?? 0) == 0) $pending[] = $filename;
         }
         return $pending;
