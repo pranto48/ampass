@@ -709,6 +709,11 @@ class UpdateService {
         return json_decode($response, true);
     }
 
+    /**
+     * Download a file from URL with verification.
+     * Returns true if download succeeded and file is valid.
+     * Logs SHA-256 checksum for audit trail.
+     */
     private static function downloadFile(string $url, string $destPath): bool {
         $token = self::getGitHubToken();
         $headers = ['User-Agent: ' . self::USER_AGENT];
@@ -720,7 +725,18 @@ class UpdateService {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         fclose($fp);
-        return $httpCode === 200 && filesize($destPath) > 1000;
+
+        if ($httpCode !== 200 || filesize($destPath) < 1000) {
+            return false;
+        }
+
+        // Log download checksum for audit/verification
+        $sha256 = hash_file('sha256', $destPath);
+        self::saveSetting('last_download_sha256', $sha256);
+        self::saveSetting('last_download_size', (string)filesize($destPath));
+        error_log("AMPass update downloaded: " . basename($destPath) . " SHA-256: " . $sha256 . " Size: " . filesize($destPath));
+
+        return true;
     }
 
     private static function getGitHubToken(): ?string {

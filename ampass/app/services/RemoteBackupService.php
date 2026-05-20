@@ -197,7 +197,14 @@ class RemoteBackupService {
         if (!$conn) return ['success' => false, 'error' => 'Cannot connect to ' . ($ssl ? 'FTPS' : 'FTP') . ' server'];
         if (!@ftp_login($conn, $user, $pass)) { ftp_close($conn); return ['success' => false, 'error' => 'Login failed']; }
         ftp_close($conn);
-        return ['success' => true, 'message' => 'Connection successful'];
+
+        $message = 'Connection successful.';
+        if ($ssl) {
+            $message .= ' Warning: PHP ftp_ssl_connect does not always verify TLS certificates. Consider SFTP or OneDrive for stronger transport security.';
+        } elseif (!$ssl) {
+            $message .= ' Warning: Plain FTP transmits credentials in cleartext. Use FTPS, SFTP, or OneDrive.';
+        }
+        return ['success' => true, 'message' => $message];
     }
 
     // ===== SFTP =====
@@ -241,7 +248,7 @@ class RemoteBackupService {
         $conn = @ssh2_connect($config['host'] ?? '', (int)($config['port'] ?? 22));
         if (!$conn) return ['success' => false, 'error' => 'Cannot connect'];
         if (!@ssh2_auth_password($conn, $config['username'] ?? '', $config['password'] ?? '')) return ['success' => false, 'error' => 'Auth failed'];
-        return ['success' => true, 'message' => 'SFTP connection successful'];
+        return ['success' => true, 'message' => 'SFTP connection successful. Note: PHP ssh2 does not expose host key fingerprint verification. Verify server identity manually for production use.'];
     }
 
     // ===== OneDrive =====
@@ -362,32 +369,47 @@ class RemoteBackupService {
 
     // ===== Config Encryption =====
 
+    /**
+     * Encrypt destination config for storage.
+     * SECURITY: MUST use APP_SECRET. Never falls back to plaintext base64.
+     * @throws \RuntimeException if APP_SECRET is not defined
+     */
     public static function encryptConfig(array $config): string {
         $json = json_encode($config);
-        if (!defined('APP_SECRET')) return base64_encode($json);
+        if (!defined('APP_SECRET') || empty(APP_SECRET)) {
+            throw new \RuntimeException('APP_SECRET is not defined. Cannot encrypt remote backup config. Check config/config.php.');
+        }
         $key = hash('sha256', APP_SECRET, true);
         $iv = random_bytes(12);
         $encrypted = openssl_encrypt($json, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+        if ($encrypted === false) {
+            throw new \RuntimeException('Config encryption failed. Check OpenSSL installation.');
+        }
         return base64_encode($iv . $tag . $encrypted);
     }
 
+    /**
+     * Decrypt destination config.
+     * SECURITY: Requires APP_SECRET. Returns null if decryption fails.
+     */
     private static function decryptConfig(string $encrypted): ?array {
-        if (!defined('APP_SECRET')) {
-            $json = base64_decode($encrypted);
-            return json_decode($json, true);
+        if (!defined('APP_SECRET') || empty(APP_SECRET)) {
+            error_log('AMPass: Cannot decrypt remote backup config — APP_SECRET not defined');
+            return null;
         }
         $data = base64_decode($encrypted);
-        if (strlen($data) < 28) return null;
+        if ($data === false || strlen($data) < 28) return null;
         $key = hash('sha256', APP_SECRET, true);
         $iv = substr($data, 0, 12);
         $tag = substr($data, 12, 16);
         $ct = substr($data, 28);
         $json = openssl_decrypt($ct, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
-        return $json ? json_decode($json, true) : null;
+        if ($json === false) return null;
+        return json_decode($json, true);
     }
 
     /**
-     * Public wrapper for decryptConfig (used by admin test)
+     * Public wrapper for decryptConfig (used by admin test/edit)
      */
     public static function decryptConfigPublic(string $encrypted): ?array {
         return self::decryptConfig($encrypted);

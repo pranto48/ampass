@@ -915,7 +915,13 @@ class AdminController {
         $newSecret = $_POST['client_secret'] ?? '';
         if (!empty($newSecret)) $config['client_secret'] = $newSecret;
 
-        $encryptedConfig = RemoteBackupService::encryptConfig($config);
+        try {
+            $encryptedConfig = RemoteBackupService::encryptConfig($config);
+        } catch (\RuntimeException $e) {
+            Session::flash('error', 'Cannot save: ' . $e->getMessage());
+            header('Location: ' . APP_URL . '/admin/backup-destinations');
+            exit;
+        }
         Database::execute("UPDATE remote_backup_destinations SET name = ?, enabled = ?, encrypted_config = ? WHERE id = ?", [$name, $enabled, $encryptedConfig, $id]);
 
         AuditLog::log('remote_backup_destination_updated', Session::getUserId(), 'destination', $id);
@@ -946,7 +952,14 @@ class AdminController {
             'folder_path' => trim($_POST['folder_path'] ?? 'AMPass Backups')
         ];
 
-        $encryptedConfig = RemoteBackupService::encryptConfig($config);
+        $encryptedConfig = null;
+        try {
+            $encryptedConfig = RemoteBackupService::encryptConfig($config);
+        } catch (\RuntimeException $e) {
+            Session::flash('error', 'Cannot save destination: ' . $e->getMessage());
+            header('Location: ' . APP_URL . '/admin/backup-destinations');
+            exit;
+        }
 
         Database::insert(
             "INSERT INTO remote_backup_destinations (name, provider, enabled, encrypted_config, created_by_user_id, created_at) VALUES (?, ?, 1, ?, ?, NOW())",
