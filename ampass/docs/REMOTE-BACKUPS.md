@@ -54,12 +54,19 @@ Requires PHP `ssh2` extension. Check with `php -m | grep ssh2`.
 
 1. Register an app at https://portal.azure.com → App registrations
 2. Add redirect URI: `https://yourdomain.com/ampass/admin/backup-destinations/onedrive-callback`
-3. Create a client secret
-4. In AMPass: Admin → Backup Destinations → Add OneDrive
-5. Enter client_id, client_secret
-6. Click **Connect OneDrive** (OAuth flow)
-7. Authorize access
-8. Backups upload to `/AMPass Backups/` folder
+3. Required scopes: `offline_access Files.ReadWrite`
+4. Create a client secret
+5. In AMPass: Admin → Backup Destinations → Add OneDrive
+6. Enter client_id, client_secret, folder path
+7. Save the destination
+8. Click **Connect OneDrive** button on the destination row
+9. Authorize access in Microsoft login
+10. Callback stores refresh_token encrypted — never logged
+11. Backups upload to configured folder (default: `AMPass Backups`)
+
+**Reconnecting:** If refresh token expires or is revoked, click "Connect OneDrive" again to re-authorize.
+
+**Redirect URI shown in admin UI:** The exact redirect URI to configure in Azure is displayed when you select OneDrive as provider.
 
 ## Automatic Upload
 
