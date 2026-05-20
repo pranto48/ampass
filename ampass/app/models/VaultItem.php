@@ -52,9 +52,9 @@ class VaultItem {
     public static function create(array $data): int {
         return Database::insert(
             "INSERT INTO vault_items 
-             (user_id, item_type, encrypted_data, encryption_iv, title_hash, url_hash, 
+             (user_id, item_type, encrypted_data, encryption_iv, title_hash, url_hash, host_hash,
               folder_id, is_favorite, password_strength, is_weak, is_reused, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
             [
                 $data['user_id'],
                 $data['item_type'] ?? 'login',
@@ -62,6 +62,7 @@ class VaultItem {
                 $data['encryption_iv'],
                 $data['title_hash'] ?? null,
                 $data['url_hash'] ?? null,
+                $data['host_hash'] ?? null,
                 $data['folder_id'] ?? null,
                 $data['is_favorite'] ?? 0,
                 $data['password_strength'] ?? null,
@@ -82,6 +83,7 @@ class VaultItem {
              item_type = ?,
              title_hash = ?,
              url_hash = ?,
+             host_hash = ?,
              folder_id = ?,
              is_favorite = ?,
              password_strength = ?,
@@ -95,6 +97,7 @@ class VaultItem {
                 $data['item_type'] ?? 'login',
                 $data['title_hash'] ?? null,
                 $data['url_hash'] ?? null,
+                $data['host_hash'] ?? null,
                 $data['folder_id'] ?? null,
                 $data['is_favorite'] ?? 0,
                 $data['password_strength'] ?? null,

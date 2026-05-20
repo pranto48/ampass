@@ -18,15 +18,32 @@
     const passwordFields = form.querySelectorAll('input[type="password"]');
     if (passwordFields.length === 0) return null;
 
-    // Get the password value
-    const passwordField = Array.from(passwordFields).find(f => f.value.length > 0);
+    // Never capture hidden password fields
+    const passwordField = Array.from(passwordFields).find(f => 
+      f.value.length > 0 && !f.hidden && f.offsetParent !== null && f.type === 'password'
+    );
     if (!passwordField || passwordField.value.length < 1) return null;
 
-    // Find username field
+    // Never save if password is empty or just whitespace
+    if (!passwordField.value.trim()) return null;
+
+    // Never capture AMPass own pages (login, unlock, register, install)
+    const ampassPatterns = ['/login', '/register', '/unlock', '/install', '/admin'];
+    const currentPath = window.location.pathname.toLowerCase();
+    for (const pattern of ampassPatterns) {
+      if (currentPath.includes(pattern) && document.querySelector('meta[name="ampass-app"]')) {
+        return null;
+      }
+    }
+
+    // Find username field (never capture hidden fields)
     const usernameField = findUsernameInForm(form);
     const username = usernameField ? usernameField.value : '';
 
     if (!username && !passwordField.value) return null;
+
+    // Never capture CSRF tokens or hidden fields as username
+    if (usernameField && usernameField.type === 'hidden') return null;
 
     return {
       url: window.location.href,

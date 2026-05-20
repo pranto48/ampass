@@ -11,7 +11,9 @@ $isEdit = $item !== null;
 $pageTitle = $isEdit ? 'Edit Item' : 'Add New Item';
 
 $typeLabels = [
-    'login' => 'Login Credential',
+    'login' => 'Web Account',
+    'app_account' => 'App Account',
+    'remote_desktop' => 'Remote Desktop',
     'secure_note' => 'Secure Note',
     'identity' => 'Identity',
     'payment_card' => 'Payment Card',
@@ -69,12 +71,57 @@ $typeLabels = [
                     <input type="url" id="field_url" class="form-input" placeholder="https://example.com">
                 </div>
 
-                <div class="form-group" data-show-for="login,identity,server_ssh">
+                <!-- App Account Fields -->
+                <div class="form-group" data-show-for="app_account">
+                    <label for="field_application_name" class="form-label">Application Name</label>
+                    <input type="text" id="field_application_name" class="form-input" placeholder="e.g., Microsoft Outlook, Zoom">
+                </div>
+                <div class="form-group" data-show-for="app_account">
+                    <label for="field_executable_path" class="form-label">Executable Path</label>
+                    <input type="text" id="field_executable_path" class="form-input" placeholder="C:\Program Files\...\app.exe">
+                </div>
+                <div class="form-group" data-show-for="app_account">
+                    <label for="field_app_website" class="form-label">Website (optional)</label>
+                    <input type="url" id="field_app_website" class="form-input" placeholder="https://outlook.office.com">
+                </div>
+
+                <!-- Remote Desktop Fields -->
+                <div class="form-group" data-show-for="remote_desktop">
+                    <label for="field_protocol" class="form-label">Protocol</label>
+                    <select id="field_protocol" class="form-select">
+                        <option value="rdp">RDP (Remote Desktop)</option>
+                        <option value="vnc">VNC</option>
+                        <option value="ssh">SSH</option>
+                    </select>
+                </div>
+                <div class="form-row" data-show-for="remote_desktop">
+                    <div class="form-group" style="flex:3;">
+                        <label for="field_host" class="form-label">Host / IP Address</label>
+                        <input type="text" id="field_host" class="form-input" placeholder="192.168.1.10 or server.example.com">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label for="field_port" class="form-label">Port</label>
+                        <input type="number" id="field_port" class="form-input" value="3389">
+                    </div>
+                </div>
+                <div class="form-group" data-show-for="remote_desktop">
+                    <label for="field_rdp_domain" class="form-label">Domain (optional)</label>
+                    <input type="text" id="field_rdp_domain" class="form-input" placeholder="WORKGROUP or domain.local">
+                </div>
+                <div class="form-group" data-show-for="remote_desktop">
+                    <label for="field_gateway" class="form-label">Gateway (optional)</label>
+                    <input type="text" id="field_gateway" class="form-input" placeholder="gateway.example.com">
+                </div>
+                <div class="alert alert-info" data-show-for="remote_desktop" style="margin:8px 0;">
+                    💡 Use AMPass Desktop App to launch RDP connections. The web vault can create/edit accounts and copy credentials, but cannot launch local desktop apps.
+                </div>
+
+                <div class="form-group" data-show-for="login,identity,server_ssh,app_account,remote_desktop">
                     <label for="field_username" class="form-label">Username / Email</label>
                     <input type="text" id="field_username" class="form-input" placeholder="username or email" autocomplete="off">
                 </div>
 
-                <div class="form-group" data-show-for="login,wifi,server_ssh">
+                <div class="form-group" data-show-for="login,wifi,server_ssh,app_account,remote_desktop">
                     <label for="field_password" class="form-label">Password</label>
                     <div class="input-wrapper">
                         <input type="password" id="field_password" class="form-input" placeholder="Enter password" autocomplete="new-password">

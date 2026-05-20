@@ -498,7 +498,7 @@ class ExtensionApiController {
         $folderId = isset($_GET['folder_id']) ? (int)$_GET['folder_id'] : null;
 
         // Validate type if provided
-        $allowedTypes = ['login', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
+        $allowedTypes = ['login', 'app_account', 'remote_desktop', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
         if ($type !== null && !in_array($type, $allowedTypes, true)) {
             http_response_code(400);
             echo json_encode(['error' => 'Invalid item type']);
@@ -583,7 +583,7 @@ class ExtensionApiController {
         }
 
         // Validate item type
-        $allowedTypes = ['login', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
+        $allowedTypes = ['login', 'app_account', 'remote_desktop', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
         $itemType = $input['item_type'] ?? 'login';
         if (!in_array($itemType, $allowedTypes, true)) {
             http_response_code(400);
@@ -598,6 +598,7 @@ class ExtensionApiController {
             'encryption_iv' => $input['encryption_iv'],
             'title_hash' => $input['title_hash'] ?? null,
             'url_hash' => $input['url_hash'] ?? null,
+            'host_hash' => $input['host_hash'] ?? null,
             'folder_id' => !empty($input['folder_id']) ? (int)$input['folder_id'] : null,
             'is_favorite' => (int)($input['is_favorite'] ?? 0),
             'password_strength' => isset($input['password_strength']) ? (int)$input['password_strength'] : null,
@@ -663,7 +664,7 @@ class ExtensionApiController {
             return;
         }
 
-        $allowedTypes = ['login', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
+        $allowedTypes = ['login', 'app_account', 'remote_desktop', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
         $itemType = $input['item_type'] ?? $existing['item_type'];
         if (!in_array($itemType, $allowedTypes, true)) $itemType = $existing['item_type'];
 
@@ -673,6 +674,7 @@ class ExtensionApiController {
             'item_type' => $itemType,
             'title_hash' => $input['title_hash'] ?? $existing['title_hash'],
             'url_hash' => $input['url_hash'] ?? $existing['url_hash'],
+            'host_hash' => $input['host_hash'] ?? ($existing['host_hash'] ?? null),
             'folder_id' => isset($input['folder_id']) ? ((int)$input['folder_id'] ?: null) : $existing['folder_id'],
             'is_favorite' => (int)($input['is_favorite'] ?? $existing['is_favorite']),
             'password_strength' => isset($input['password_strength']) ? (int)$input['password_strength'] : $existing['password_strength'],
@@ -762,6 +764,73 @@ class ExtensionApiController {
     // ================================================================
     // UTILITY ENDPOINTS
     // ================================================================
+
+    /**
+     * POST /api/extension/vault/usageLog
+     * Log a vault item usage action (copy, autofill, launch, etc.)
+     * SECURITY: Never logs plaintext secrets. Only item_id, action, client_type.
+     */
+    public function vaultUsageLog(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            return;
+        }
+
+        if (!$this->requireAuth()) return;
+        if (!$this->rateLimit('usage_log', 60, 60)) return;
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!$input || !is_array($input)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid request body']);
+            return;
+        }
+
+        $itemId = (int)($input['item_id'] ?? 0);
+        $action = $input['action'] ?? '';
+        $clientType = $input['client_type'] ?? 'extension';
+
+        // Validate action against allowlist
+        $allowedActions = [
+            'copied_password', 'copied_username', 'copied_host',
+            'autofilled', 'launched_app', 'app_launch_failed',
+            'opened_rdp', 'rdp_open_failed',
+            'autosave_prompt_shown', 'autosave_skipped',
+            'clipboard_cleared', 'item_viewed'
+        ];
+        if (!in_array($action, $allowedActions, true)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid action']);
+            return;
+        }
+
+        // Validate client_type
+        $allowedClients = ['extension', 'desktop', 'web'];
+        if (!in_array($clientType, $allowedClients, true)) {
+            $clientType = 'extension';
+        }
+
+        // Validate item belongs to user (if item_id provided)
+        if ($itemId > 0) {
+            $item = VaultItem::findById($itemId, $this->userId);
+            if (!$item) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Item not found']);
+                return;
+            }
+            // Mark as used
+            VaultItem::markUsed($itemId, $this->userId);
+        }
+
+        // Log the action
+        ExtensionAudit::log($action, $this->userId, $this->deviceId, 'vault_item', $itemId ?: null, [
+            'client_type' => $clientType,
+            'item_type' => $item['item_type'] ?? null
+        ]);
+
+        echo json_encode(['success' => true]);
+    }
 
     /**
      * GET /api/extension/generator/policy

@@ -148,6 +148,231 @@ async fn record_activity(state: tauri::State<'_, AppState>) -> Result<(), String
     Ok(())
 }
 
+// ================================================================
+// APP LAUNCH & REMOTE DESKTOP COMMANDS
+// SECURITY: Never passes passwords as command-line arguments.
+// ================================================================
+
+/// Launch a desktop application by executable path.
+/// Validates path exists before launching. Never accepts password arguments.
+#[tauri::command]
+async fn launch_application(path: String) -> Result<(), String> {
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Err("Empty path".to_string());
+    }
+
+    // Basic path validation — reject obviously dangerous patterns
+    if path.contains("..") || path.contains('\0') {
+        return Err("Invalid path".to_string());
+    }
+
+    // Check if file exists (for .exe paths)
+    let path_obj = std::path::Path::new(&path);
+    if path_obj.extension().is_some() && !path_obj.exists() {
+        return Err(format!("Executable not found: {}", path));
+    }
+
+    // Launch the application
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to launch: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::process::Command;
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to launch: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Open a file's location in the file explorer.
+#[tauri::command]
+async fn open_file_location(path: String) -> Result<(), String> {
+    let path = path.trim().to_string();
+    if path.is_empty() { return Err("Empty path".to_string()); }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("explorer")
+            .args(["/select,", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to open location: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let parent = std::path::Path::new(&path).parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.clone());
+        use std::process::Command;
+        Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| format!("Failed to open location: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Open an RDP connection by creating a temporary .rdp file.
+/// SECURITY: Password is NEVER written to the .rdp file.
+/// User must copy password separately and paste when prompted.
+#[tauri::command]
+async fn open_rdp_connection(host: String, port: u16, username: String, redirect_clipboard: bool) -> Result<(), String> {
+    if host.is_empty() { return Err("Host is required".to_string()); }
+    if host.contains("..") || host.contains('\0') { return Err("Invalid host".to_string()); }
+
+    // Create temporary .rdp file content (NO password)
+    let mut rdp_content = String::new();
+    rdp_content.push_str(&format!("full address:s:{}:{}\r\n", host, port));
+    if !username.is_empty() {
+        rdp_content.push_str(&format!("username:s:{}\r\n", username));
+    }
+    rdp_content.push_str("screen mode id:i:2\r\n"); // fullscreen
+    if redirect_clipboard {
+        rdp_content.push_str("redirectclipboard:i:1\r\n");
+    }
+    rdp_content.push_str("prompt for credentials:i:1\r\n"); // Always prompt for password
+
+    // Write to temp file
+    let temp_dir = std::env::temp_dir();
+    let rdp_filename = format!("ampass_rdp_{}.rdp", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis());
+    let rdp_path = temp_dir.join(&rdp_filename);
+
+    std::fs::write(&rdp_path, &rdp_content)
+        .map_err(|e| format!("Failed to create .rdp file: {}", e))?;
+
+    // Launch mstsc with the .rdp file
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("mstsc")
+            .arg(rdp_path.to_string_lossy().to_string())
+            .spawn()
+            .map_err(|e| format!("Failed to launch mstsc: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Linux, try xfreerdp or rdesktop
+        use std::process::Command;
+        let result = Command::new("xfreerdp")
+            .arg(format!("/v:{}:{}", host, port))
+            .arg(format!("/u:{}", username))
+            .arg("/cert:ignore")
+            .spawn();
+        if result.is_err() {
+            Command::new("rdesktop")
+                .arg(format!("{}:{}", host, port))
+                .spawn()
+                .map_err(|e| format!("Failed to launch RDP client: {}", e))?;
+        }
+    }
+
+    // Schedule temp file deletion after 10 seconds
+    let rdp_path_clone = rdp_path.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        let _ = std::fs::remove_file(rdp_path_clone);
+    });
+
+    Ok(())
+}
+
+/// Pick an executable file using system file dialog.
+#[tauri::command]
+async fn pick_executable(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let file = app.dialog()
+        .file()
+        .add_filter("Executables", &["exe", "msi", "bat", "cmd", "lnk"])
+        .add_filter("All Files", &["*"])
+        .blocking_pick_file();
+    Ok(file.map(|f| f.to_string()))
+}
+
+/// List installed applications (Windows Start Menu + registry).
+/// Does NOT require admin permissions.
+#[tauri::command]
+async fn list_installed_apps() -> Result<Vec<serde_json::Value>, String> {
+    let mut apps: Vec<serde_json::Value> = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        // Scan Start Menu shortcuts
+        let start_menu_paths = vec![
+            std::env::var("ProgramData").unwrap_or_default() + r"\Microsoft\Windows\Start Menu\Programs",
+            std::env::var("APPDATA").unwrap_or_default() + r"\Microsoft\Windows\Start Menu\Programs",
+        ];
+
+        for base_path in &start_menu_paths {
+            if let Ok(entries) = std::fs::read_dir(base_path) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "lnk").unwrap_or(false) {
+                        let name = path.file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        if !name.is_empty() && !name.starts_with("Uninstall") {
+                            apps.push(serde_json::json!({
+                                "name": name,
+                                "path": path.to_string_lossy().to_string(),
+                                "source": "start_menu"
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Limit to avoid huge lists
+        apps.truncate(200);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Linux, scan .desktop files
+        let desktop_dirs = vec![
+            "/usr/share/applications".to_string(),
+            format!("{}/.local/share/applications", std::env::var("HOME").unwrap_or_default()),
+        ];
+        for dir in &desktop_dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "desktop").unwrap_or(false) {
+                        let name = path.file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        apps.push(serde_json::json!({
+                            "name": name,
+                            "path": path.to_string_lossy().to_string(),
+                            "source": "desktop_file"
+                        }));
+                    }
+                }
+            }
+        }
+        apps.truncate(200);
+    }
+
+    Ok(apps)
+}
+
 pub fn run() {
     let app_state = AppState::default();
     
@@ -182,6 +407,11 @@ pub fn run() {
             wipe_local_data,
             logout,
             record_activity,
+            launch_application,
+            open_file_location,
+            open_rdp_connection,
+            pick_executable,
+            list_installed_apps,
             backup::pick_backup_file,
             backup::pick_save_location,
         ])

@@ -159,6 +159,8 @@
     await decryptAll();
     renderQuickAccess();
     renderWebAccounts();
+    renderAppAccounts();
+    renderRemoteDesktop();
     renderIdentities();
     renderMemos();
     updateSyncTime();
@@ -197,6 +199,16 @@
     document.getElementById('webAccountsList').innerHTML = items.length ? items.map(i => itemRow(i)).join('') : '<p class="empty-hint">No web accounts</p>';
   }
 
+  function renderAppAccounts() {
+    const items = allDecrypted.filter(i => i._type === 'app_account');
+    document.getElementById('appAccountsList').innerHTML = items.length ? items.map(i => appAccountRow(i)).join('') : '<p class="empty-hint">No app accounts. Add accounts for desktop applications like Outlook, Zoom, Teams.</p>';
+  }
+
+  function renderRemoteDesktop() {
+    const items = allDecrypted.filter(i => i._type === 'remote_desktop');
+    document.getElementById('remoteDesktopList').innerHTML = items.length ? items.map(i => rdpRow(i)).join('') : '<p class="empty-hint">No remote desktop accounts. Add RDP, VNC, or other remote connections.</p>';
+  }
+
   function renderIdentities() {
     const items = allDecrypted.filter(i => i._type === 'identity');
     document.getElementById('identitiesList').innerHTML = items.length ? items.map(i => itemRow(i)).join('') : '<p class="empty-hint">No identities</p>';
@@ -205,6 +217,44 @@
   function renderMemos() {
     const items = allDecrypted.filter(i => i._type === 'secure_note');
     document.getElementById('memosList').innerHTML = items.length ? items.map(i => itemRow(i)).join('') : '<p class="empty-hint">No secure memos</p>';
+  }
+
+  function appAccountRow(item) {
+    const appName = item.application_name || item.title || 'Unknown App';
+    const login = item.username || item.login_hint || '';
+    const exePath = item.executable_path || '';
+    return `<div class="item-row" data-id="${item._id}">
+      <div class="item-icon">💻</div>
+      <div class="item-info">
+        <span class="item-title">${esc(appName)}</span>
+        <span class="item-sub">${esc(login)}${exePath ? ' — ' + esc(exePath.split('\\\\').pop().split('/').pop()) : ''}</span>
+      </div>
+      <div class="item-actions">
+        <button class="btn-ghost-sm" title="Launch App" onclick="launchApp(${item._id})">🚀</button>
+        <button class="btn-ghost-sm" title="Copy Username" onclick="copyField(${item._id},'username')">👤</button>
+        <button class="btn-ghost-sm" title="Copy Password" onclick="copyField(${item._id},'password')">🔑</button>
+      </div>
+    </div>`;
+  }
+
+  function rdpRow(item) {
+    const name = item.title || item.connection_name || 'RDP Connection';
+    const host = item.host || '';
+    const login = item.username || '';
+    const protocol = (item.protocol || 'rdp').toUpperCase();
+    return `<div class="item-row" data-id="${item._id}">
+      <div class="item-icon">🖥️</div>
+      <div class="item-info">
+        <span class="item-title">${esc(name)}</span>
+        <span class="item-sub">${esc(host)} — ${esc(login)} (${protocol})</span>
+      </div>
+      <div class="item-actions">
+        <button class="btn-ghost-sm" title="Open RDP" onclick="openRdp(${item._id})">🔗</button>
+        <button class="btn-ghost-sm" title="Copy Host" onclick="copyField(${item._id},'host')">🌐</button>
+        <button class="btn-ghost-sm" title="Copy Username" onclick="copyField(${item._id},'username')">👤</button>
+        <button class="btn-ghost-sm" title="Copy Password" onclick="copyField(${item._id},'password')">🔑</button>
+      </div>
+    </div>`;
   }
 
   function itemRow(item) {
@@ -234,7 +284,57 @@
     await navigator.clipboard.writeText(item[field]);
     toast(field === 'password' ? 'Password copied (clears in 30s)' : 'Copied!');
     if (field === 'password') setTimeout(async () => { try { const c = await navigator.clipboard.readText(); if (c === item[field]) await navigator.clipboard.writeText(''); } catch {} }, 30000);
+    // Log usage
+    try { await Api.usageLog(id, 'copied_' + field, 'desktop'); } catch {}
   }
+
+  // Make copyField available globally for inline onclick handlers
+  window.copyField = copyField;
+
+  /**
+   * Launch a desktop application.
+   * SECURITY: Never passes password as command-line argument.
+   */
+  async function launchApp(id) {
+    const item = allDecrypted.find(i => i._id === id);
+    if (!item) { toast('Item not found'); return; }
+    const exePath = item.executable_path || item.launch_command || '';
+    if (!exePath) { toast('No executable path configured'); return; }
+    try {
+      await invoke('launch_application', { path: exePath });
+      toast('App launched: ' + (item.application_name || item.title));
+      try { await Api.usageLog(id, 'launched_app', 'desktop'); } catch {}
+    } catch (e) {
+      toast('Launch failed: ' + e.message);
+      try { await Api.usageLog(id, 'app_launch_failed', 'desktop'); } catch {}
+    }
+  }
+  window.launchApp = launchApp;
+
+  /**
+   * Open Remote Desktop connection.
+   * Creates temporary .rdp file WITHOUT password, launches mstsc.
+   * SECURITY: Password is never written to .rdp file. User must paste manually.
+   */
+  async function openRdp(id) {
+    const item = allDecrypted.find(i => i._id === id);
+    if (!item) { toast('Item not found'); return; }
+    const host = item.host || '';
+    const port = item.port || 3389;
+    const username = item.username || '';
+    const domain = item.domain || '';
+    if (!host) { toast('No host configured'); return; }
+    try {
+      const fullUser = domain ? domain + '\\' + username : username;
+      await invoke('open_rdp_connection', { host, port, username: fullUser, redirectClipboard: true });
+      toast('RDP launched — paste password when prompted');
+      try { await Api.usageLog(id, 'opened_rdp', 'desktop'); } catch {}
+    } catch (e) {
+      toast('RDP launch failed: ' + e.message);
+      try { await Api.usageLog(id, 'rdp_open_failed', 'desktop'); } catch {}
+    }
+  }
+  window.openRdp = openRdp;
 
   function showItemDetail(id) {
     const item = allDecrypted.find(i => i._id === id);
@@ -251,13 +351,28 @@
   }
 
   function showAddModal(type) {
-    document.getElementById('modalTitle').textContent = type === 'login' ? 'Add Web Account' : type === 'identity' ? 'Add Identity' : 'Add Secure Memo';
+    const titles = { login: 'Add Web Account', identity: 'Add Identity', secure_note: 'Add Secure Memo', app_account: 'Add App Account', remote_desktop: 'Add Remote Desktop' };
+    document.getElementById('modalTitle').textContent = titles[type] || 'Add Item';
     let html = '<div class="auth-form">';
     html += '<label class="field-label">Title</label><input type="text" id="addTitle" class="field-input">';
     if (type === 'login') {
       html += '<label class="field-label">URL</label><input type="url" id="addUrl" class="field-input">';
       html += '<label class="field-label">Username</label><input type="text" id="addUser" class="field-input">';
       html += '<label class="field-label">Password</label><input type="password" id="addPass" class="field-input">';
+    } else if (type === 'app_account') {
+      html += '<label class="field-label">Application Name</label><input type="text" id="addAppName" class="field-input" placeholder="e.g. Microsoft Outlook">';
+      html += '<label class="field-label">Executable Path</label><div style="display:flex;gap:4px;"><input type="text" id="addExePath" class="field-input" placeholder="C:\\Program Files\\...\\app.exe" style="flex:1;"><button class="btn-ghost-sm" id="btnBrowseExe" title="Browse">📂</button></div>';
+      html += '<label class="field-label">Username / Login</label><input type="text" id="addUser" class="field-input">';
+      html += '<label class="field-label">Password</label><input type="password" id="addPass" class="field-input">';
+      html += '<label class="field-label">Website (optional)</label><input type="url" id="addUrl" class="field-input">';
+    } else if (type === 'remote_desktop') {
+      html += '<label class="field-label">Host / IP</label><input type="text" id="addHost" class="field-input" placeholder="192.168.1.10">';
+      html += '<label class="field-label">Port</label><input type="number" id="addPort" class="field-input" value="3389">';
+      html += '<label class="field-label">Protocol</label><select id="addProtocol" class="field-input"><option value="rdp">RDP</option><option value="vnc">VNC</option><option value="ssh">SSH</option></select>';
+      html += '<label class="field-label">Domain (optional)</label><input type="text" id="addDomain" class="field-input">';
+      html += '<label class="field-label">Username</label><input type="text" id="addUser" class="field-input">';
+      html += '<label class="field-label">Password</label><input type="password" id="addPass" class="field-input">';
+      html += '<label class="field-label">Gateway (optional)</label><input type="text" id="addGateway" class="field-input">';
     }
     html += '<label class="field-label">Notes</label><textarea id="addNotes" class="field-input" rows="3"></textarea>';
     html += '</div>';
@@ -265,17 +380,41 @@
     document.getElementById('modalFooter').innerHTML = `<button class="btn-ghost-sm" onclick="document.getElementById('itemModal').style.display='none'">Cancel</button><button class="btn-primary" style="width:auto;margin:0;padding:8px 16px;" id="btnSaveNew">Save</button>`;
     document.getElementById('itemModal').style.display = 'flex';
     document.getElementById('btnSaveNew').addEventListener('click', () => saveNewItem(type));
+    // Browse exe button
+    const browseBtn = document.getElementById('btnBrowseExe');
+    if (browseBtn) browseBtn.addEventListener('click', async () => {
+      try { const path = await invoke('pick_executable'); if (path) document.getElementById('addExePath').value = path; } catch {}
+    });
   }
 
   async function saveNewItem(type) {
     const data = { title: document.getElementById('addTitle')?.value || '', notes: document.getElementById('addNotes')?.value || '' };
-    if (type === 'login') { data.url = document.getElementById('addUrl')?.value || ''; data.username = document.getElementById('addUser')?.value || ''; data.password = document.getElementById('addPass')?.value || ''; }
+    if (type === 'login') {
+      data.url = document.getElementById('addUrl')?.value || '';
+      data.username = document.getElementById('addUser')?.value || '';
+      data.password = document.getElementById('addPass')?.value || '';
+    } else if (type === 'app_account') {
+      data.application_name = document.getElementById('addAppName')?.value || data.title;
+      data.executable_path = document.getElementById('addExePath')?.value || '';
+      data.username = document.getElementById('addUser')?.value || '';
+      data.password = document.getElementById('addPass')?.value || '';
+      data.website = document.getElementById('addUrl')?.value || '';
+    } else if (type === 'remote_desktop') {
+      data.host = document.getElementById('addHost')?.value || '';
+      data.port = parseInt(document.getElementById('addPort')?.value || '3389');
+      data.protocol = document.getElementById('addProtocol')?.value || 'rdp';
+      data.domain = document.getElementById('addDomain')?.value || '';
+      data.username = document.getElementById('addUser')?.value || '';
+      data.password = document.getElementById('addPass')?.value || '';
+      data.gateway = document.getElementById('addGateway')?.value || '';
+    }
     if (!data.title) { toast('Title is required'); return; }
     try {
       const encrypted = await Crypto.encryptItem(data, vaultKeyHex);
       const urlHash = data.url ? await Crypto.computeSearchHash(data.url, searchKey) : null;
       const titleHash = await Crypto.computeSearchHash(data.title, searchKey);
-      await Api.saveItem({ item_type: type, encrypted_data: encrypted.ciphertext, encryption_iv: encrypted.iv, url_hash: urlHash, title_hash: titleHash, password_strength: Crypto.strength(data.password || ''), is_weak: Crypto.strength(data.password || '') < 40 ? 1 : 0 });
+      const hostHash = data.host ? await Crypto.computeSearchHash(data.host, searchKey) : null;
+      await Api.saveItem({ item_type: type, encrypted_data: encrypted.ciphertext, encryption_iv: encrypted.iv, url_hash: urlHash, title_hash: titleHash, host_hash: hostHash, password_strength: Crypto.strength(data.password || ''), is_weak: Crypto.strength(data.password || '') < 40 ? 1 : 0 });
       document.getElementById('itemModal').style.display = 'none';
       toast('Item saved!');
       await loadVault();
@@ -291,8 +430,18 @@
   // ===== Search =====
   document.getElementById('searchInput').addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase().trim();
-    const filtered = q ? allDecrypted.filter(i => (i.title||'').toLowerCase().includes(q) || (i.username||'').toLowerCase().includes(q) || (i.url||'').toLowerCase().includes(q)) : allDecrypted.filter(i => i._type === 'login');
-    document.getElementById('webAccountsList').innerHTML = filtered.length ? filtered.map(i => itemRow(i)).join('') : '<p class="empty-hint">No results</p>';
+    if (!q) { renderQuickAccess(); renderWebAccounts(); renderAppAccounts(); renderRemoteDesktop(); renderIdentities(); renderMemos(); return; }
+    const filtered = allDecrypted.filter(i =>
+      (i.title||'').toLowerCase().includes(q) ||
+      (i.username||'').toLowerCase().includes(q) ||
+      (i.url||'').toLowerCase().includes(q) ||
+      (i.application_name||'').toLowerCase().includes(q) ||
+      (i.host||'').toLowerCase().includes(q) ||
+      (i.connection_name||'').toLowerCase().includes(q)
+    );
+    document.getElementById('webAccountsList').innerHTML = filtered.filter(i => i._type === 'login').map(i => itemRow(i)).join('') || '<p class="empty-hint">No results</p>';
+    document.getElementById('appAccountsList').innerHTML = filtered.filter(i => i._type === 'app_account').map(i => appAccountRow(i)).join('') || '';
+    document.getElementById('remoteDesktopList').innerHTML = filtered.filter(i => i._type === 'remote_desktop').map(i => rdpRow(i)).join('') || '';
     showPage('webAccounts');
   });
 

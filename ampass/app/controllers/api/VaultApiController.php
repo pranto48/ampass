@@ -83,7 +83,7 @@ class VaultApiController {
         }
 
         // SECURITY: Validate item_type against allowlist
-        $allowedTypes = ['login', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
+        $allowedTypes = ['login', 'app_account', 'remote_desktop', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
         $itemType = $input['item_type'] ?? 'login';
         if (!in_array($itemType, $allowedTypes, true)) {
             http_response_code(400);
@@ -98,6 +98,7 @@ class VaultApiController {
             'encryption_iv' => $input['encryption_iv'],
             'title_hash' => $input['title_hash'] ?? null,
             'url_hash' => $input['url_hash'] ?? null,
+            'host_hash' => $input['host_hash'] ?? null,
             'folder_id' => !empty($input['folder_id']) ? (int)$input['folder_id'] : null,
             'is_favorite' => (int)($input['is_favorite'] ?? 0),
             'password_strength' => isset($input['password_strength']) ? (int)$input['password_strength'] : null,

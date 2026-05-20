@@ -105,6 +105,22 @@
                 data.username = document.getElementById('field_username')?.value || '';
                 data.password = document.getElementById('field_password')?.value || '';
                 break;
+            case 'app_account':
+                data.application_name = document.getElementById('field_application_name')?.value || '';
+                data.executable_path = document.getElementById('field_executable_path')?.value || '';
+                data.username = document.getElementById('field_username')?.value || '';
+                data.password = document.getElementById('field_password')?.value || '';
+                data.website = document.getElementById('field_app_website')?.value || '';
+                break;
+            case 'remote_desktop':
+                data.protocol = document.getElementById('field_protocol')?.value || 'rdp';
+                data.host = document.getElementById('field_host')?.value || '';
+                data.port = parseInt(document.getElementById('field_port')?.value || '3389');
+                data.domain = document.getElementById('field_rdp_domain')?.value || '';
+                data.username = document.getElementById('field_username')?.value || '';
+                data.password = document.getElementById('field_password')?.value || '';
+                data.gateway = document.getElementById('field_gateway')?.value || '';
+                break;
             case 'payment_card':
                 data.card_number = document.getElementById('field_card_number')?.value || '';
                 data.card_expiry = document.getElementById('field_card_expiry')?.value || '';
@@ -189,6 +205,7 @@
             const searchKey = await AMPassCrypto.deriveSearchKey();
             const titleHash = await AMPassCrypto.computeSearchHash(formData.title, searchKey);
             const urlHash = formData.url ? await AMPassCrypto.computeSearchHash(formData.url, searchKey) : null;
+            const hostHash = formData.host ? await AMPassCrypto.computeSearchHash(formData.host, searchKey) : null;
 
             // Send to server
             const payload = {
@@ -198,6 +215,7 @@
                 encryption_iv: encrypted.iv,
                 title_hash: titleHash,
                 url_hash: urlHash,
+                host_hash: hostHash,
                 folder_id: document.getElementById('field_folder')?.value || null,
                 is_favorite: document.getElementById('field_favorite')?.checked ? 1 : 0,
                 password_strength: passwordStrength,

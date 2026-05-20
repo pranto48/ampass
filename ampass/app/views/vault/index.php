@@ -9,7 +9,9 @@ $currentFolder = $currentFolder ?? null;
 $csrfToken = $csrfToken ?? CSRF::generateToken();
 
 $typeLabels = [
-    'login' => 'Logins',
+    'login' => 'Web Accounts',
+    'app_account' => 'App Accounts',
+    'remote_desktop' => 'Remote Desktop',
     'secure_note' => 'Secure Notes',
     'identity' => 'Identities',
     'payment_card' => 'Payment Cards',
@@ -38,7 +40,9 @@ $typeLabels = [
 <div class="filters-bar">
     <div class="filter-tabs">
         <a href="<?= APP_URL ?>/vault" class="filter-tab <?= !$currentType ? 'active' : '' ?>">All</a>
-        <a href="<?= APP_URL ?>/vault?type=login" class="filter-tab <?= $currentType === 'login' ? 'active' : '' ?>">Logins</a>
+        <a href="<?= APP_URL ?>/vault?type=login" class="filter-tab <?= $currentType === 'login' ? 'active' : '' ?>">Web</a>
+        <a href="<?= APP_URL ?>/vault?type=app_account" class="filter-tab <?= $currentType === 'app_account' ? 'active' : '' ?>">Apps</a>
+        <a href="<?= APP_URL ?>/vault?type=remote_desktop" class="filter-tab <?= $currentType === 'remote_desktop' ? 'active' : '' ?>">RDP</a>
         <a href="<?= APP_URL ?>/vault?type=secure_note" class="filter-tab <?= $currentType === 'secure_note' ? 'active' : '' ?>">Notes</a>
         <a href="<?= APP_URL ?>/vault?type=payment_card" class="filter-tab <?= $currentType === 'payment_card' ? 'active' : '' ?>">Cards</a>
         <a href="<?= APP_URL ?>/vault?type=identity" class="filter-tab <?= $currentType === 'identity' ? 'active' : '' ?>">Identity</a>
@@ -74,6 +78,10 @@ $typeLabels = [
             <div class="vault-item-icon vault-icon-<?= $item['item_type'] ?>">
                 <?php if ($item['item_type'] === 'login'): ?>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                <?php elseif ($item['item_type'] === 'app_account'): ?>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <?php elseif ($item['item_type'] === 'remote_desktop'): ?>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><circle cx="12" cy="10" r="2"/></svg>
                 <?php elseif ($item['item_type'] === 'secure_note'): ?>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
                 <?php elseif ($item['item_type'] === 'payment_card'): ?>

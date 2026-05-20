@@ -66,6 +66,7 @@
           <a href="#" class="nav-link active" data-page="quickAccess"><span class="nav-icon">⚡</span>Quick Access</a>
           <a href="#" class="nav-link" data-page="webAccounts"><span class="nav-icon">🌐</span>Web Accounts</a>
           <a href="#" class="nav-link" data-page="appAccounts"><span class="nav-icon">💻</span>App Accounts</a>
+          <a href="#" class="nav-link" data-page="remoteDesktop"><span class="nav-icon">🖥️</span>Remote Desktop</a>
           <a href="#" class="nav-link" data-page="identities"><span class="nav-icon">👤</span>Identities</a>
           <a href="#" class="nav-link" data-page="bookmarks"><span class="nav-icon">🔖</span>Bookmarks</a>
           <a href="#" class="nav-link" data-page="secureMemos"><span class="nav-icon">📝</span>Secure Memos</a>
@@ -128,6 +129,36 @@
           <div id="pageWebAccounts" class="page">
             <div class="page-header"><h1>Web Accounts</h1><button class="btn-sm btn-add" data-add="login">+ Add</button></div>
             <div id="webAccountsList" class="item-table"></div>
+          </div>
+
+          <!-- App Accounts -->
+          <div id="pageAppAccounts" class="page">
+            <div class="page-header">
+              <h1>App Accounts</h1>
+              <div class="page-actions">
+                <button class="btn-sm btn-add" data-add="app_account">+ Add Account</button>
+              </div>
+            </div>
+            <div id="appAccountsList" class="item-table"></div>
+            <div class="page-footer-hint">
+              <p>💡 Select an Application to create a new Account. Suggested: Microsoft Outlook, Zoom, Microsoft Teams, Slack, Remote Desktop Connection.</p>
+              <p class="text-muted">Use AMPass Desktop to launch apps and copy credentials securely. Passwords are never passed via command line.</p>
+            </div>
+          </div>
+
+          <!-- Remote Desktop -->
+          <div id="pageRemoteDesktop" class="page">
+            <div class="page-header">
+              <h1>Remote Desktop</h1>
+              <div class="page-actions">
+                <button class="btn-sm btn-add" data-add="remote_desktop">+ Add RDP Account</button>
+              </div>
+            </div>
+            <div id="remoteDesktopList" class="item-table"></div>
+            <div class="page-footer-hint">
+              <p>💡 Open RDP creates a temporary .rdp file (without password). Copy password manually and paste when prompted.</p>
+              <p class="text-muted">Clipboard auto-clears after configured timeout. Temporary .rdp files are deleted after launch.</p>
+            </div>
           </div>
 
           <!-- Identities -->
