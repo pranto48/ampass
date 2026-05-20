@@ -105,6 +105,13 @@ pub fn wipe_all() -> Result<(), String> {
             .map_err(|e| format!("Failed to delete cache: {}", e))?;
     }
     
+    // Delete secure config (derivation params, etc.)
+    let secure_config_path = dir.join("secure-config.enc");
+    if secure_config_path.exists() {
+        fs::remove_file(&secure_config_path)
+            .map_err(|e| format!("Failed to delete secure config: {}", e))?;
+    }
+    
     // Delete config
     let config_path = dir.join("config.json");
     if config_path.exists() {
@@ -112,6 +119,80 @@ pub fn wipe_all() -> Result<(), String> {
             .map_err(|e| format!("Failed to delete config: {}", e))?;
     }
     
+    Ok(())
+}
+
+/// Save encrypted secure config (derivation params, trusted device metadata)
+/// SECURITY: Encrypted with device key from OS keychain. Never stores master password or vault key.
+pub fn save_secure_config(key: &str, value: &str) -> Result<(), String> {
+    let dir = data_dir()?;
+    let path = dir.join("secure-config.enc");
+    let device_key = keychain::get_or_create_device_key()?;
+
+    // Load existing config or start fresh
+    let mut config: serde_json::Value = if path.exists() {
+        let encrypted = fs::read(&path).map_err(|e| format!("Failed to read secure config: {}", e))?;
+        let decrypted = decrypt_data(&encrypted, &device_key).unwrap_or_else(|_| b"{}".to_vec());
+        serde_json::from_slice(&decrypted).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    config[key] = serde_json::Value::String(value.to_string());
+
+    let json = serde_json::to_string(&config).map_err(|e| format!("Serialize error: {}", e))?;
+    let encrypted = encrypt_data(json.as_bytes(), &device_key)?;
+    fs::write(&path, encrypted).map_err(|e| format!("Failed to write secure config: {}", e))
+}
+
+/// Load a value from encrypted secure config
+pub fn load_secure_config(key: &str) -> Result<Option<String>, String> {
+    let dir = data_dir()?;
+    let path = dir.join("secure-config.enc");
+
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let device_key = keychain::get_or_create_device_key()?;
+    let encrypted = fs::read(&path).map_err(|e| format!("Failed to read secure config: {}", e))?;
+    let decrypted = decrypt_data(&encrypted, &device_key)?;
+    let config: serde_json::Value = serde_json::from_slice(&decrypted)
+        .map_err(|e| format!("Failed to parse secure config: {}", e))?;
+
+    Ok(config.get(key).and_then(|v| v.as_str()).map(|s| s.to_string()))
+}
+
+/// Delete a key from encrypted secure config
+pub fn delete_secure_config(key: &str) -> Result<(), String> {
+    let dir = data_dir()?;
+    let path = dir.join("secure-config.enc");
+
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let device_key = keychain::get_or_create_device_key()?;
+    let encrypted = fs::read(&path).map_err(|e| format!("Failed to read secure config: {}", e))?;
+    let decrypted = decrypt_data(&encrypted, &device_key).unwrap_or_else(|_| b"{}".to_vec());
+    let mut config: serde_json::Value = serde_json::from_slice(&decrypted).unwrap_or(serde_json::json!({}));
+
+    if let Some(obj) = config.as_object_mut() {
+        obj.remove(key);
+    }
+
+    let json = serde_json::to_string(&config).map_err(|e| format!("Serialize error: {}", e))?;
+    let encrypted = encrypt_data(json.as_bytes(), &device_key)?;
+    fs::write(&path, encrypted).map_err(|e| format!("Failed to write secure config: {}", e))
+}
+
+/// Clear all secure config (derivation params, trusted device data)
+pub fn clear_secure_config() -> Result<(), String> {
+    let dir = data_dir()?;
+    let path = dir.join("secure-config.enc");
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("Failed to delete secure config: {}", e))?;
+    }
     Ok(())
 }
 
