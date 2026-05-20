@@ -39,9 +39,24 @@ class UpdateService {
         $owner = self::getSetting('github_repo_owner', 'pranto48');
         $repo = self::getSetting('github_repo_name', 'ampass-secure-vault');
         $sourceType = self::getSetting('update_source_type', 'github_release');
+        $branch = self::getSetting('github_branch', 'main');
         $token = self::getGitHubToken();
 
-        $result = ['update_available' => false, 'current_version' => self::getInstalledVersion()];
+        $result = [
+            'update_available' => false,
+            'current_version' => self::getInstalledVersion(),
+            'installed_commit_sha' => self::getSetting('installed_commit_sha', ''),
+            'source_type' => $sourceType,
+            'owner' => $owner,
+            'repo' => $repo,
+            'branch' => $branch,
+            'latest_version' => '',
+            'latest_commit_sha' => '',
+            'commit_message' => '',
+            'download_url' => '',
+            'warning' => '',
+            'error' => ''
+        ];
 
         try {
             if ($sourceType === 'github_release') {
@@ -53,27 +68,46 @@ class UpdateService {
                     $result['release_notes'] = $release['body'] ?? '';
                     $result['download_url'] = $release['zipball_url'] ?? '';
                     $result['update_available'] = version_compare($latestVersion, $result['current_version'], '>');
+
+                    // If same version but different commit, show informational note
+                    if (!$result['update_available'] && !empty($result['latest_commit_sha']) && !empty($result['installed_commit_sha'])) {
+                        if ($result['latest_commit_sha'] !== $result['installed_commit_sha']) {
+                            $result['warning'] = 'New commits may exist on GitHub, but release mode only updates from tagged releases. Switch to "Branch ZIP" mode for development updates.';
+                        }
+                    }
+                } else {
+                    // No release found — helpful warning
+                    $result['warning'] = 'No GitHub release found for ' . $owner . '/' . $repo . '. Switch to "Latest Branch ZIP" mode for development updates, or create a GitHub release.';
                 }
             } else {
-                $branch = self::getSetting('github_branch', 'main');
+                // Branch ZIP mode — compare commit SHAs
                 $commit = self::fetchLatestCommit($owner, $repo, $branch, $token);
                 if ($commit) {
                     $result['latest_commit_sha'] = $commit['sha'] ?? '';
                     $result['latest_version'] = $result['current_version'];
-                    $result['commit_message'] = $commit['commit']['message'] ?? '';
-                    $installedSha = self::getSetting('installed_commit_sha', '');
-                    $result['update_available'] = !empty($result['latest_commit_sha']) && $result['latest_commit_sha'] !== $installedSha;
+                    $result['commit_message'] = substr($commit['commit']['message'] ?? '', 0, 200);
                     $result['download_url'] = "https://github.com/{$owner}/{$repo}/archive/refs/heads/{$branch}.zip";
+
+                    $installedSha = self::getSetting('installed_commit_sha', '');
+                    // Update available if: latest SHA exists AND (installed SHA is empty OR different)
+                    $result['update_available'] = !empty($result['latest_commit_sha']) &&
+                        (empty($installedSha) || $result['latest_commit_sha'] !== $installedSha);
+                } else {
+                    $result['error'] = "Could not fetch latest commit for branch '{$branch}'. Check repo settings and token.";
                 }
             }
         } catch (\Exception $e) {
             $result['error'] = $e->getMessage();
         }
 
+        // Save state
         self::saveSetting('last_update_check_at', date('c'));
         self::saveSetting('latest_version', $result['latest_version'] ?? '');
         self::saveSetting('latest_commit_sha', $result['latest_commit_sha'] ?? '');
+        self::saveSetting('latest_commit_message', $result['commit_message'] ?? '');
+        self::saveSetting('latest_download_url', $result['download_url'] ?? '');
         self::saveSetting('update_available', $result['update_available'] ? '1' : '0');
+        self::saveSetting('last_check_error', $result['error'] ?? '');
 
         return $result;
     }

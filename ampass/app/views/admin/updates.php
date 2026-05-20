@@ -2,31 +2,62 @@
 $csrfToken = $data['csrfToken'] ?? CSRF::generateToken();
 $success = Session::flash('success');
 $error = Session::flash('error');
+$sourceType = $data['source_type'] ?? 'github_release';
+$sourceLabel = $sourceType === 'github_branch_zip' ? 'Branch ZIP' : 'GitHub Release';
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Updates - AMPass Admin</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="<?= APP_URL ?>/public/css/app.css"></head>
 <body>
 <div class="admin-page">
-    <div class="admin-header"><a href="<?= APP_URL ?>/admin" class="btn-back">← Admin</a><h1>Updates</h1></div>
+    <div class="admin-header"><a href="<?= APP_URL ?>/admin" class="btn-back">&larr; Admin</a><h1>Updates</h1></div>
 
     <?php if ($success): ?><div class="alert alert-success"><?= htmlspecialchars($success) ?></div><?php endif; ?>
     <?php if ($error): ?><div class="alert alert-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
     <!-- Version Info -->
     <div class="card">
-        <div class="card-header"><h2 class="card-title">Version</h2></div>
+        <div class="card-header"><h2 class="card-title">Version Status</h2><span class="badge"><?= htmlspecialchars($sourceLabel) ?></span></div>
         <div class="card-body">
             <div class="info-grid">
-                <div class="info-item"><span>Installed:</span><strong>v<?= htmlspecialchars($data['current_version']) ?></strong></div>
-                <div class="info-item"><span>Commit:</span><strong><code><?= htmlspecialchars(substr($data['installed_sha'], 0, 8) ?: '—') ?></code></strong></div>
-                <div class="info-item"><span>Latest:</span><strong><?= $data['update_available'] ? '<span style="color:var(--warning);">v' . htmlspecialchars($data['latest_version']) . ' available</span>' : 'Up to date ✅' ?></strong></div>
-                <div class="info-item"><span>Last checked:</span><strong><?= htmlspecialchars($data['last_checked']) ?></strong></div>
+                <div class="info-item"><span>Installed Version:</span><strong>v<?= htmlspecialchars($data['current_version']) ?></strong></div>
+                <div class="info-item"><span>Installed Commit:</span><strong><code><?= htmlspecialchars(substr($data['installed_sha'], 0, 8) ?: 'not set') ?></code></strong></div>
+                <div class="info-item"><span>Source:</span><strong><?= htmlspecialchars($sourceLabel) ?> (<?= htmlspecialchars($data['github_repo_owner'] . '/' . $data['github_repo_name']) ?>)</strong></div>
+                <?php if ($sourceType === 'github_branch_zip'): ?>
+                <div class="info-item"><span>Branch:</span><strong><?= htmlspecialchars($data['github_branch']) ?></strong></div>
+                <?php endif; ?>
+                <div class="info-item"><span>Latest Commit:</span><strong><code><?= htmlspecialchars(substr($data['latest_sha'], 0, 8) ?: '—') ?></code></strong></div>
+                <?php if (!empty($data['commit_message'])): ?>
+                <div class="info-item"><span>Commit Message:</span><strong><?= htmlspecialchars(substr($data['commit_message'], 0, 100)) ?></strong></div>
+                <?php endif; ?>
+                <div class="info-item"><span>Status:</span><strong><?php
+                    if ($data['update_available']) {
+                        $label = 'Update available';
+                        if (!empty($data['latest_sha']) && $data['latest_sha'] !== $data['installed_sha']) {
+                            $label .= ' (commit ' . substr($data['latest_sha'], 0, 8) . ')';
+                        }
+                        echo '<span style="color:var(--warning);">' . htmlspecialchars($label) . '</span>';
+                    } else {
+                        echo 'Up to date &#10003;';
+                    }
+                ?></strong></div>
+                <div class="info-item"><span>Last Checked:</span><strong><?= htmlspecialchars($data['last_checked']) ?></strong></div>
+                <?php if (!empty($data['check_error'])): ?>
+                <div class="info-item"><span>Last Error:</span><strong style="color:var(--danger);"><?= htmlspecialchars(substr($data['check_error'], 0, 150)) ?></strong></div>
+                <?php endif; ?>
             </div>
-            <form method="POST" action="<?= APP_URL ?>/admin/updates/check" style="margin-top:12px;">
-                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
-                <button type="submit" class="btn btn-secondary">Check for Updates</button>
-            </form>
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                <form method="POST" action="<?= APP_URL ?>/admin/updates/check" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                    <button type="submit" class="btn btn-secondary">Check for Updates</button>
+                </form>
+                <?php if (!empty($data['latest_sha'])): ?>
+                <form method="POST" action="<?= APP_URL ?>/admin/updates/mark-installed" style="display:inline;" onsubmit="return confirm('Mark current code as installed? Use after manual git pull.')">
+                    <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                    <button type="submit" class="btn btn-ghost btn-sm">Mark Current as Installed</button>
+                </form>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -35,7 +66,10 @@ $error = Session::flash('error');
     <div class="card">
         <div class="card-header"><h2 class="card-title">Apply Update</h2></div>
         <div class="card-body">
-            <div class="alert alert-warning">⚠️ An encrypted backup will be created before updating. Do not close this page during update.</div>
+            <div class="alert alert-warning">&#9888; An encrypted backup will be created before updating. Do not close this page during update.</div>
+            <?php if (!empty($data['download_url'])): ?>
+            <p class="text-muted" style="font-size:0.8rem;margin-bottom:12px;">Download: <?= htmlspecialchars(substr($data['download_url'], 0, 100)) ?></p>
+            <?php endif; ?>
             <form method="POST" action="<?= APP_URL ?>/admin/updates/apply">
                 <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
                 <div class="form-group"><label class="form-label">Backup Password (for pre-update backup)</label><input type="password" name="backup_password" class="form-input" required minlength="8"></div>
@@ -45,6 +79,38 @@ $error = Session::flash('error');
         </div>
     </div>
     <?php endif; ?>
+
+    <!-- Update Settings -->
+    <div class="card">
+        <div class="card-header"><h2 class="card-title">Update Settings</h2></div>
+        <div class="card-body">
+            <form method="POST" action="<?= APP_URL ?>/admin/updates/settings">
+                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                <div class="form-group">
+                    <label class="form-label">Update Source</label>
+                    <select name="update_source_type" class="form-select">
+                        <option value="github_release" <?= $sourceType === 'github_release' ? 'selected' : '' ?>>Stable Releases (tagged versions)</option>
+                        <option value="github_branch_zip" <?= $sourceType === 'github_branch_zip' ? 'selected' : '' ?>>Latest Branch ZIP (development/commits)</option>
+                    </select>
+                    <small class="text-muted">Use "Branch ZIP" for development to detect new commits. Use "Stable Releases" for production.</small>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Repository Owner</label><input type="text" name="github_repo_owner" class="form-input" value="<?= htmlspecialchars($data['github_repo_owner']) ?>" required></div>
+                    <div class="form-group"><label class="form-label">Repository Name</label><input type="text" name="github_repo_name" class="form-input" value="<?= htmlspecialchars($data['github_repo_name']) ?>" required></div>
+                </div>
+                <div class="form-group"><label class="form-label">Branch</label><input type="text" name="github_branch" class="form-input" value="<?= htmlspecialchars($data['github_branch']) ?>" placeholder="main"></div>
+                <div class="form-group">
+                    <label class="form-label">GitHub Token (optional, for private repos or higher rate limits)</label>
+                    <input type="password" name="github_token" class="form-input" placeholder="<?= $data['github_token_set'] ? '••••••••••••••••' : 'ghp_...' ?>">
+                    <?php if ($data['github_token_set']): ?>
+                    <label class="checkbox-label" style="margin-top:4px;"><input type="checkbox" name="github_token_clear" value="1"> Remove saved token</label>
+                    <?php endif; ?>
+                    <small class="text-muted">Token is encrypted at rest. Never logged.</small>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </form>
+        </div>
+    </div>
 
     <!-- Pending Migrations -->
     <?php if (!empty($data['pending_migrations'])): ?>
@@ -75,7 +141,7 @@ $error = Session::flash('error');
         </div>
     </div>
 
-    <p class="text-muted" style="margin-top:16px;font-size:0.72rem;">Source: github.com/pranto48/ampass-secure-vault • ⚠️ Requires professional security audit.</p>
+    <p class="text-muted" style="margin-top:16px;font-size:0.72rem;">Source: github.com/<?= htmlspecialchars($data['github_repo_owner'] . '/' . $data['github_repo_name']) ?> &bull; &#9888; AMPass updater requires professional security audit before production use.</p>
 </div>
 </body>
 </html>

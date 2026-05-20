@@ -655,6 +655,8 @@ class AdminController {
             case 'check': $this->updatesCheck(); return;
             case 'apply': $this->updatesApply(); return;
             case 'migrations': $this->updatesRunMigrations(); return;
+            case 'settings': $this->updatesSaveSettings(); return;
+            case 'mark-installed': $this->updatesMarkInstalled(); return;
         }
 
         $data = [
@@ -664,6 +666,14 @@ class AdminController {
             'latest_sha' => UpdateService::getSetting('latest_commit_sha', ''),
             'update_available' => UpdateService::getSetting('update_available', '0') === '1',
             'last_checked' => UpdateService::getSetting('last_update_check_at', 'Never'),
+            'commit_message' => UpdateService::getSetting('latest_commit_message', ''),
+            'download_url' => UpdateService::getSetting('latest_download_url', ''),
+            'check_error' => UpdateService::getSetting('last_check_error', ''),
+            'source_type' => UpdateService::getSetting('update_source_type', 'github_release'),
+            'github_repo_owner' => UpdateService::getSetting('github_repo_owner', 'pranto48'),
+            'github_repo_name' => UpdateService::getSetting('github_repo_name', 'ampass-secure-vault'),
+            'github_branch' => UpdateService::getSetting('github_branch', 'main'),
+            'github_token_set' => !empty(UpdateService::getSetting('github_token_encrypted', '')),
             'history' => UpdateService::getUpdateHistory(10),
             'pending_migrations' => UpdateService::getPendingMigrations(),
             'csrfToken' => CSRF::generateToken()
@@ -673,19 +683,34 @@ class AdminController {
 
     private function updatesCheck(): void {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
-        CSRF::validateOrFail();
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
         $result = UpdateService::checkForUpdates();
         AuditLog::log('update_check', Session::getUserId(), null, null, ['available' => $result['update_available'] ?? false]);
-        if (!empty($result['error'])) { Session::flash('error', $result['error']); }
-        elseif ($result['update_available']) { Session::flash('success', 'Update available: v' . ($result['latest_version'] ?? '?')); }
-        else { Session::flash('success', 'AMPass is up to date.'); }
+
+        if (!empty($result['error'])) {
+            Session::flash('error', $result['error']);
+        } elseif ($result['update_available']) {
+            $msg = 'Update available: ';
+            if (!empty($result['latest_version']) && $result['latest_version'] !== $result['current_version']) {
+                $msg .= 'v' . $result['latest_version'];
+            } elseif (!empty($result['latest_commit_sha'])) {
+                $msg .= 'new commit ' . substr($result['latest_commit_sha'], 0, 8);
+            } else {
+                $msg .= 'new version';
+            }
+            Session::flash('success', $msg);
+        } elseif (!empty($result['warning'])) {
+            Session::flash('error', $result['warning']);
+        } else {
+            Session::flash('success', 'AMPass is up to date.');
+        }
         header('Location: ' . APP_URL . '/admin/updates');
         exit;
     }
 
     private function updatesApply(): void {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
-        CSRF::validateOrFail();
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
 
         $confirmation = trim($_POST['confirmation'] ?? '');
         $backupPassword = $_POST['backup_password'] ?? '';
@@ -709,11 +734,73 @@ class AdminController {
 
     private function updatesRunMigrations(): void {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
-        CSRF::validateOrFail();
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
         $result = UpdateService::runPendingMigrations();
         if ($result['failed']) { Session::flash('error', 'Migration failed: ' . $result['failed']); }
         elseif (count($result['applied']) > 0) { Session::flash('success', 'Applied ' . count($result['applied']) . ' migration(s).'); }
         else { Session::flash('success', 'No pending migrations.'); }
+        header('Location: ' . APP_URL . '/admin/updates');
+        exit;
+    }
+
+    private function updatesSaveSettings(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
+
+        $allowedSourceTypes = ['github_release', 'github_branch_zip'];
+        $sourceType = $_POST['update_source_type'] ?? 'github_release';
+        if (!in_array($sourceType, $allowedSourceTypes, true)) $sourceType = 'github_release';
+
+        $owner = preg_replace('/[^a-zA-Z0-9\-_]/', '', trim($_POST['github_repo_owner'] ?? 'pranto48'));
+        $repo = preg_replace('/[^a-zA-Z0-9\-_.]/', '', trim($_POST['github_repo_name'] ?? 'ampass-secure-vault'));
+        $branch = preg_replace('/[^a-zA-Z0-9\-_./]/', '', trim($_POST['github_branch'] ?? 'main'));
+
+        if (empty($owner)) $owner = 'pranto48';
+        if (empty($repo)) $repo = 'ampass-secure-vault';
+        if (empty($branch)) $branch = 'main';
+
+        UpdateService::saveSetting('update_source_type', $sourceType);
+        UpdateService::saveSetting('github_repo_owner', $owner);
+        UpdateService::saveSetting('github_repo_name', $repo);
+        UpdateService::saveSetting('github_branch', $branch);
+
+        // Handle GitHub token (only update if new value provided, not masked)
+        $token = trim($_POST['github_token'] ?? '');
+        if (!empty($token) && !str_contains($token, '****')) {
+            // Encrypt token before storing
+            if (defined('APP_SECRET')) {
+                $key = hash('sha256', APP_SECRET, true);
+                $iv = random_bytes(12);
+                $encrypted = openssl_encrypt($token, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+                UpdateService::saveSetting('github_token_encrypted', base64_encode($iv . $tag . $encrypted));
+            }
+        } elseif (isset($_POST['github_token_clear']) && $_POST['github_token_clear'] === '1') {
+            UpdateService::saveSetting('github_token_encrypted', '');
+        }
+
+        // Reset update check state when settings change
+        UpdateService::saveSetting('update_available', '0');
+        UpdateService::saveSetting('last_check_error', '');
+
+        AuditLog::log('update_settings_changed', Session::getUserId(), null, null, ['source_type' => $sourceType, 'branch' => $branch]);
+        Session::flash('success', 'Update settings saved. Click "Check for Updates" to verify.');
+        header('Location: ' . APP_URL . '/admin/updates');
+        exit;
+    }
+
+    private function updatesMarkInstalled(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
+
+        $latestSha = UpdateService::getSetting('latest_commit_sha', '');
+        if (!empty($latestSha)) {
+            UpdateService::saveSetting('installed_commit_sha', $latestSha);
+            UpdateService::saveSetting('update_available', '0');
+            AuditLog::log('update_marked_installed', Session::getUserId(), null, null, ['sha' => substr($latestSha, 0, 8)]);
+            Session::flash('success', 'Current code marked as installed (commit ' . substr($latestSha, 0, 8) . ').');
+        } else {
+            Session::flash('error', 'No latest commit SHA available. Run "Check for Updates" first.');
+        }
         header('Location: ' . APP_URL . '/admin/updates');
         exit;
     }

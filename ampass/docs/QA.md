@@ -193,3 +193,40 @@
 - [ ] Page with multiple login forms → each gets its own icon
 - [ ] Clicking icon fills the correct form (not always the first one)
 - [ ] Icon repositions on scroll/resize
+
+## Updater — Source Type & Commit Detection
+
+### GitHub Release Mode
+- [ ] Set source type to "Stable Releases" → save settings
+- [ ] Check for updates with no GitHub releases → shows helpful warning, NOT false "up to date"
+- [ ] Check for updates with a release → shows version comparison
+- [ ] Same version but different commit → shows note about switching to Branch ZIP mode
+
+### GitHub Branch ZIP Mode
+- [ ] Set source type to "Latest Branch ZIP" → save settings
+- [ ] Set branch to "main" → save
+- [ ] installed_commit_sha is empty → check shows "update available"
+- [ ] Push new commit to main → check shows "update available: new commit {sha}"
+- [ ] Apply update → installed_commit_sha equals latest_commit_sha
+- [ ] Check again → shows "up to date"
+- [ ] Change branch setting to different branch → check uses that branch
+
+### Update Settings UI
+- [ ] /admin/updates shows Update Settings card
+- [ ] Source type dropdown works (github_release / github_branch_zip)
+- [ ] Repo owner/name/branch fields save correctly
+- [ ] GitHub token saves encrypted (masked in UI)
+- [ ] "Remove saved token" checkbox clears token
+- [ ] Invalid GitHub token shows safe error on check
+- [ ] Private repo with valid token works
+
+### Mark as Installed
+- [ ] "Mark Current as Installed" button sets installed_commit_sha = latest_commit_sha
+- [ ] After marking, status shows "up to date"
+- [ ] Button only appears after at least one check (latest_sha exists)
+
+### Debug Info
+- [ ] Admin page shows: source type, owner/repo, branch, installed commit, latest commit
+- [ ] Commit message displayed after check
+- [ ] Last check error displayed if any
+- [ ] Download URL shown when update available
