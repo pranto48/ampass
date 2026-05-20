@@ -1,6 +1,6 @@
 # AMPass — App Accounts & Remote Desktop QA
 
-## ⚠️ Security Warning
+## Security Warning
 
 AMPass app accounts, remote desktop accounts, browser extension, desktop app, updater, remote backup, and web vault require professional security audit before real credential storage.
 
@@ -12,11 +12,19 @@ Stores credentials for desktop applications (Outlook, Zoom, Teams, Slack, custom
 ### remote_desktop
 Stores credentials for remote connections (RDP, VNC, SSH).
 
-## Database Migration
+## Database
 
+### Fresh Install
+- [ ] `schema.sql` creates vault_items with `app_account` and `remote_desktop` in enum
+- [ ] `schema.sql` includes `host_hash` VARCHAR(64) column
+- [ ] `schema.sql` includes `idx_vault_host_hash` index
+- [ ] `schema.sql` includes `idx_vault_last_used` composite index
+
+### Migration (Existing Install)
 - [ ] Migration `006_app_accounts_remote_desktop.sql` runs successfully
-- [ ] `vault_items.item_type` enum includes `app_account` and `remote_desktop`
-- [ ] `host_hash` column added to `vault_items`
+- [ ] Migration is idempotent (safe to re-run without error)
+- [ ] `host_hash` column added only if not already present
+- [ ] Indexes added only if not already present
 - [ ] Existing `login` items still work after migration
 
 ## Web Vault Tests
@@ -31,45 +39,58 @@ Stores credentials for remote connections (RDP, VNC, SSH).
 - [ ] Both types appear in "All Items" view
 - [ ] Copy username/password works for both types
 - [ ] Edit/delete works for both types
+- [ ] host_hash is computed and stored for remote_desktop items
 
 ## Desktop App Tests
 
+### UI Structure
+- [ ] Only ONE element with id="pageAppAccounts" exists (no duplicate)
+- [ ] App Accounts page opens from sidebar
+- [ ] Remote Desktop page opens from sidebar
+
 ### App Accounts Page
-- [ ] Sidebar shows "App Accounts" link
-- [ ] App Accounts page renders with table
-- [ ] Add Account modal shows correct fields
-- [ ] Browse .exe button opens file picker
+- [ ] Add Account modal shows correct fields (name, exe path, browse, username, password, website)
+- [ ] Browse .exe button opens file picker (uses native dialog, not cmd.exe)
 - [ ] Save creates encrypted app_account item
 - [ ] App appears in list after save
 - [ ] Copy Username button works
 - [ ] Copy Password button works + auto-clear clipboard after 30s
-- [ ] Launch App button launches executable
+- [ ] Launch App button launches executable directly (no cmd /C)
 - [ ] Launch fails gracefully if path doesn't exist
+- [ ] Launch rejects paths with shell metacharacters (|, &, ;, `, $, etc.)
+- [ ] Launch rejects paths with null bytes, CR, LF
 - [ ] Failed launch logs error via usage-log API
 
 ### Remote Desktop Page
-- [ ] Sidebar shows "Remote Desktop" link
-- [ ] Remote Desktop page renders with table
 - [ ] Add RDP Account modal shows correct fields
 - [ ] Save creates encrypted remote_desktop item
 - [ ] RDP item appears in list after save
 - [ ] Open RDP creates temporary .rdp file WITHOUT password
+- [ ] .rdp file contains `prompt for credentials:i:1`
 - [ ] mstsc launches with the .rdp file
-- [ ] Temporary .rdp file is deleted after 10 seconds
+- [ ] Temporary .rdp file is deleted after 45 seconds
 - [ ] Copy Host button works
 - [ ] Copy Username button works
 - [ ] Copy Password button works + auto-clear clipboard
 - [ ] Failed RDP launch logs error
 
-### Security Checks
-- [ ] No plaintext passwords in database
-- [ ] No plaintext passwords in logs
-- [ ] No vault key in local storage/disk
-- [ ] No keylogging
-- [ ] App launch NEVER passes password via command line
-- [ ] RDP file NEVER contains password
-- [ ] Clipboard auto-clears after timeout
-- [ ] Usage log never contains plaintext secrets
+### RDP Security
+- [ ] Host rejects CR/LF characters (prevents .rdp line injection)
+- [ ] Host rejects null bytes and control characters
+- [ ] Host allows only: alphanumeric, dot, dash, underscore, colon
+- [ ] Host max length 255 enforced
+- [ ] Username rejects CR/LF/null/control characters
+- [ ] Username max length 256 enforced
+- [ ] Port validated 1-65535
+- [ ] Password NEVER written to .rdp file
+
+### Launch Security
+- [ ] launch_application does NOT use `cmd /C start` with untrusted path
+- [ ] .exe files launched directly via Command::new(&path)
+- [ ] .lnk files opened via explorer.exe (safe)
+- [ ] Paths with `..` rejected
+- [ ] Paths with shell metacharacters rejected
+- [ ] Non-existent paths return error (not silent failure)
 
 ## Browser Extension Tests
 
@@ -80,17 +101,10 @@ Stores credentials for remote connections (RDP, VNC, SSH).
 - [ ] Does NOT capture AMPass own login/unlock/register pages
 - [ ] Does NOT capture hidden password fields
 - [ ] Does NOT save if password field is empty/whitespace
+- [ ] Does NOT capture desktop app passwords (extension is web-only)
 - [ ] Server offline: save is blocked (read-only mode)
 - [ ] Autofill still works from offline cache
 - [ ] Save prompt gives user time (30s timeout before auto-continue)
-- [ ] Enter key login triggers save detection
-- [ ] Button click login triggers save detection
-- [ ] SPA login forms detected
-
-### Extension Popup
-- [ ] Shows all item types in search results
-- [ ] App Account and Remote Desktop items show copy buttons
-- [ ] Launch buttons show "Use AMPass Desktop" message for non-web items
 
 ## API Tests
 
@@ -100,42 +114,14 @@ Stores credentials for remote connections (RDP, VNC, SSH).
 - [ ] `GET /api/extension/vault/list?type=remote_desktop` filters correctly
 - [ ] `POST /api/extension/vault/usage-log` accepts valid actions
 - [ ] `POST /api/extension/vault/usage-log` rejects invalid actions
-- [ ] `POST /api/extension/vault/usage-log` validates item belongs to user
 - [ ] Usage log never contains plaintext secrets
 - [ ] host_hash stored for remote_desktop items
 
-## Audit Logging
+## Import/Export Compatibility
 
-### Actions Logged
-- [ ] vault_item_created (web)
-- [ ] vault_item_updated (web)
-- [ ] vault_item_deleted (web)
-- [ ] autosave_created (extension)
-- [ ] autosave_updated (extension)
-- [ ] copied_password (desktop/extension)
-- [ ] copied_username (desktop/extension)
-- [ ] copied_host (desktop)
-- [ ] launched_app (desktop)
-- [ ] app_launch_failed (desktop)
-- [ ] opened_rdp (desktop)
-- [ ] rdp_open_failed (desktop)
-- [ ] autofilled (extension)
-- [ ] autosave_prompt_shown (extension)
-- [ ] autosave_skipped (extension)
-- [ ] clipboard_cleared (desktop)
-
-### Audit Security
-- [ ] No plaintext passwords in audit logs
-- [ ] No full usernames logged by default
-- [ ] Only item_id, item_type, action, device_id, timestamp, IP stored
-- [ ] Admin can filter audit by action/client/item_type
-
-## Import/Export/Backup Compatibility
-
-- [ ] Encrypted backup includes app_account and remote_desktop items
-- [ ] Import handles app_account and remote_desktop types
-- [ ] Export includes all item types
+- [ ] Import preserves host_hash field
+- [ ] Import validates item_type against allowlist (invalid defaults to 'custom')
+- [ ] Export includes app_account and remote_desktop items
 - [ ] Existing backups still restore (backward compatible)
 - [ ] Offline extension cache includes new item types
 - [ ] Desktop offline cache includes new item types
-- [ ] Security dashboard counts include new types

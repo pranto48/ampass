@@ -154,7 +154,8 @@ async fn record_activity(state: tauri::State<'_, AppState>) -> Result<(), String
 // ================================================================
 
 /// Launch a desktop application by executable path.
-/// Validates path exists before launching. Never accepts password arguments.
+/// SECURITY: Never passes passwords as command-line arguments.
+/// Only accepts a single executable path — no arguments, no shell metacharacters.
 #[tauri::command]
 async fn launch_application(path: String) -> Result<(), String> {
     let path = path.trim().to_string();
@@ -162,34 +163,83 @@ async fn launch_application(path: String) -> Result<(), String> {
         return Err("Empty path".to_string());
     }
 
-    // Basic path validation — reject obviously dangerous patterns
-    if path.contains("..") || path.contains('\0') {
-        return Err("Invalid path".to_string());
+    // Reject dangerous patterns
+    if path.contains('\0') || path.contains('\r') || path.contains('\n') {
+        return Err("Path contains invalid characters".to_string());
+    }
+    if path.contains("..") {
+        return Err("Path traversal not allowed".to_string());
     }
 
-    // Check if file exists (for .exe paths)
+    // Reject shell metacharacters that could enable injection
+    let dangerous_chars = ['|', '&', ';', '`', '$', '>', '<', '!', '{', '}'];
+    for ch in &dangerous_chars {
+        if path.contains(*ch) {
+            return Err(format!("Path contains disallowed character: {}", ch));
+        }
+    }
+
     let path_obj = std::path::Path::new(&path);
-    if path_obj.extension().is_some() && !path_obj.exists() {
-        return Err(format!("Executable not found: {}", path));
-    }
 
-    // Launch the application
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        Command::new("cmd")
-            .args(["/C", "start", "", &path])
-            .spawn()
-            .map_err(|e| format!("Failed to launch: {}", e))?;
+        let ext = path_obj.extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+
+        match ext.as_str() {
+            "exe" | "msi" => {
+                // Direct execution for real executables — no shell involved
+                if !path_obj.exists() {
+                    return Err(format!("Executable not found: {}", path));
+                }
+                Command::new(&path)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch: {}", e))?;
+            }
+            "lnk" => {
+                // Shell links: use explorer to open safely
+                Command::new("explorer.exe")
+                    .arg(&path)
+                    .spawn()
+                    .map_err(|e| format!("Failed to open shortcut: {}", e))?;
+            }
+            _ => {
+                // For other file types or paths without extension,
+                // try direct execution if the file exists
+                if path_obj.exists() {
+                    Command::new(&path)
+                        .spawn()
+                        .map_err(|e| format!("Failed to launch: {}", e))?;
+                } else {
+                    return Err(format!("File not found: {}", path));
+                }
+            }
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         use std::process::Command;
-        Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to launch: {}", e))?;
+        if !path_obj.exists() {
+            return Err(format!("File not found: {}", path));
+        }
+        // Check if file is executable
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = std::fs::metadata(&path)
+            .map_err(|e| format!("Cannot read file: {}", e))?;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            // Not executable, try xdg-open
+            Command::new("xdg-open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open: {}", e))?;
+        } else {
+            Command::new(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to launch: {}", e))?;
+        }
     }
 
     Ok(())
@@ -228,12 +278,38 @@ async fn open_file_location(path: String) -> Result<(), String> {
 /// Open an RDP connection by creating a temporary .rdp file.
 /// SECURITY: Password is NEVER written to the .rdp file.
 /// User must copy password separately and paste when prompted.
+/// Validates host/username to prevent .rdp line injection via CR/LF.
 #[tauri::command]
 async fn open_rdp_connection(host: String, port: u16, username: String, redirect_clipboard: bool) -> Result<(), String> {
+    // Validate host
+    let host = host.trim().to_string();
     if host.is_empty() { return Err("Host is required".to_string()); }
-    if host.contains("..") || host.contains('\0') { return Err("Invalid host".to_string()); }
+    if host.len() > 255 { return Err("Host too long (max 255 chars)".to_string()); }
 
-    // Create temporary .rdp file content (NO password)
+    // Reject CR, LF, null bytes, and control characters in host
+    for ch in host.chars() {
+        if ch == '\r' || ch == '\n' || ch == '\0' || ch.is_control() {
+            return Err("Host contains invalid control characters".to_string());
+        }
+    }
+    // Allow only hostname/IP characters: A-Z a-z 0-9 . - _ :
+    if !host.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_' || c == ':') {
+        return Err("Host contains disallowed characters. Only alphanumeric, dot, dash, underscore, colon allowed.".to_string());
+    }
+
+    // Validate port
+    if port == 0 { return Err("Port must be 1-65535".to_string()); }
+
+    // Validate username (reject CR/LF/control chars)
+    let username = username.trim().to_string();
+    if username.len() > 256 { return Err("Username too long (max 256 chars)".to_string()); }
+    for ch in username.chars() {
+        if ch == '\r' || ch == '\n' || ch == '\0' || (ch.is_control() && ch != '\t') {
+            return Err("Username contains invalid control characters".to_string());
+        }
+    }
+
+    // Create temporary .rdp file content (NO password, NO secrets)
     let mut rdp_content = String::new();
     rdp_content.push_str(&format!("full address:s:{}:{}\r\n", host, port));
     if !username.is_empty() {
@@ -283,10 +359,10 @@ async fn open_rdp_connection(host: String, port: u16, username: String, redirect
         }
     }
 
-    // Schedule temp file deletion after 10 seconds
+    // Schedule temp file deletion after 45 seconds (gives mstsc time to read it)
     let rdp_path_clone = rdp_path.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        std::thread::sleep(std::time::Duration::from_secs(45));
         let _ = std::fs::remove_file(rdp_path_clone);
     });
 
@@ -301,8 +377,17 @@ async fn pick_executable(app: tauri::AppHandle) -> Result<Option<String>, String
         .file()
         .add_filter("Executables", &["exe", "msi", "bat", "cmd", "lnk"])
         .add_filter("All Files", &["*"])
+        .set_title("Select Application")
         .blocking_pick_file();
-    Ok(file.map(|f| f.to_string()))
+
+    match file {
+        Some(path) => {
+            let path = path.into_path()
+                .map_err(|_| "Selected file path is not accessible".to_string())?;
+            Ok(Some(path.to_string_lossy().to_string()))
+        }
+        None => Ok(None), // User cancelled
+    }
 }
 
 /// List installed applications (Windows Start Menu + registry).

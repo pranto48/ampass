@@ -244,19 +244,29 @@ class VaultApiController {
         $imported = 0;
         Database::beginTransaction();
 
+        // Allowlist for imported item types
+        $allowedImportTypes = ['login', 'app_account', 'remote_desktop', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom'];
+
         try {
             foreach ($input['items'] as $item) {
                 if (empty($item['encrypted_data']) || empty($item['encryption_iv'])) {
                     continue;
                 }
 
+                // Validate item_type — default to 'custom' if invalid
+                $itemType = $item['item_type'] ?? 'login';
+                if (!in_array($itemType, $allowedImportTypes, true)) {
+                    $itemType = 'custom';
+                }
+
                 VaultItem::create([
                     'user_id' => $this->userId,
-                    'item_type' => $item['item_type'] ?? 'login',
+                    'item_type' => $itemType,
                     'encrypted_data' => $item['encrypted_data'],
                     'encryption_iv' => $item['encryption_iv'],
                     'title_hash' => $item['title_hash'] ?? null,
                     'url_hash' => $item['url_hash'] ?? null,
+                    'host_hash' => $item['host_hash'] ?? null,
                     'folder_id' => null, // Don't import folder references
                     'is_favorite' => (int)($item['is_favorite'] ?? 0),
                     'password_strength' => $item['password_strength'] ?? null,

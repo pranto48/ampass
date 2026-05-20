@@ -1,8 +1,10 @@
 -- AMPass Migration 006: Add app_account and remote_desktop vault item types
--- Extends the vault_items.item_type to support desktop app accounts and remote desktop credentials.
+-- For existing installations. Fresh installs already include these in schema.sql.
 -- SECURITY: All sensitive data remains inside encrypted_data (client-side encrypted).
+-- This migration is designed to be as idempotent as practical for MySQL/MariaDB.
 
--- Alter item_type enum to include new types
+-- Step 1: Alter item_type enum to include new types.
+-- MySQL ALTER MODIFY is safe to re-run (replaces the enum definition).
 ALTER TABLE `vault_items` MODIFY COLUMN `item_type` ENUM(
     'login',
     'app_account',
@@ -17,9 +19,58 @@ ALTER TABLE `vault_items` MODIFY COLUMN `item_type` ENUM(
     'custom'
 ) NOT NULL DEFAULT 'login';
 
--- Add host_hash column for remote_desktop domain matching (optional, for future server-side search)
-ALTER TABLE `vault_items` ADD COLUMN `host_hash` VARCHAR(64) NULL DEFAULT NULL AFTER `url_hash`;
-ALTER TABLE `vault_items` ADD INDEX `idx_vault_host_hash` (`host_hash`);
+-- Step 2: Add host_hash column if it does not already exist.
+-- MySQL does not support IF NOT EXISTS on ALTER TABLE ADD COLUMN,
+-- so we use a procedure to check first.
+DROP PROCEDURE IF EXISTS `_ampass_migration_006_add_host_hash`;
+DELIMITER //
+CREATE PROCEDURE `_ampass_migration_006_add_host_hash`()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'vault_items'
+          AND COLUMN_NAME = 'host_hash'
+    ) THEN
+        ALTER TABLE `vault_items` ADD COLUMN `host_hash` VARCHAR(64) NULL DEFAULT NULL COMMENT 'HMAC of host for remote desktop matching' AFTER `url_hash`;
+    END IF;
+END //
+DELIMITER ;
+CALL `_ampass_migration_006_add_host_hash`();
+DROP PROCEDURE IF EXISTS `_ampass_migration_006_add_host_hash`;
 
--- Add last_used_at index for better sorting performance
-ALTER TABLE `vault_items` ADD INDEX `idx_vault_last_used` (`user_id`, `last_used_at` DESC);
+-- Step 3: Add index on host_hash if it does not already exist.
+DROP PROCEDURE IF EXISTS `_ampass_migration_006_add_idx_host_hash`;
+DELIMITER //
+CREATE PROCEDURE `_ampass_migration_006_add_idx_host_hash`()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'vault_items'
+          AND INDEX_NAME = 'idx_vault_host_hash'
+    ) THEN
+        ALTER TABLE `vault_items` ADD INDEX `idx_vault_host_hash` (`host_hash`);
+    END IF;
+END //
+DELIMITER ;
+CALL `_ampass_migration_006_add_idx_host_hash`();
+DROP PROCEDURE IF EXISTS `_ampass_migration_006_add_idx_host_hash`;
+
+-- Step 4: Add composite index on (user_id, last_used_at) if it does not already exist.
+DROP PROCEDURE IF EXISTS `_ampass_migration_006_add_idx_last_used`;
+DELIMITER //
+CREATE PROCEDURE `_ampass_migration_006_add_idx_last_used`()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'vault_items'
+          AND INDEX_NAME = 'idx_vault_last_used'
+    ) THEN
+        ALTER TABLE `vault_items` ADD INDEX `idx_vault_last_used` (`user_id`, `last_used_at` DESC);
+    END IF;
+END //
+DELIMITER ;
+CALL `_ampass_migration_006_add_idx_last_used`();
+DROP PROCEDURE IF EXISTS `_ampass_migration_006_add_idx_last_used`;

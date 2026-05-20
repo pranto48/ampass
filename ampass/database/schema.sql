@@ -55,11 +55,12 @@ CREATE TABLE IF NOT EXISTS `user_security` (
 CREATE TABLE IF NOT EXISTS `vault_items` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `user_id` INT UNSIGNED NOT NULL,
-    `item_type` ENUM('login', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom') NOT NULL DEFAULT 'login',
+    `item_type` ENUM('login', 'app_account', 'remote_desktop', 'secure_note', 'identity', 'payment_card', 'wifi', 'server_ssh', 'software_license', 'bank_account', 'custom') NOT NULL DEFAULT 'login',
     `encrypted_data` LONGTEXT NOT NULL COMMENT 'AES-GCM encrypted JSON blob of all item fields',
     `encryption_iv` VARCHAR(64) NOT NULL COMMENT 'IV/nonce for this item',
     `title_hash` VARCHAR(64) NULL COMMENT 'HMAC of title for server-side search without decryption',
     `url_hash` VARCHAR(64) NULL COMMENT 'HMAC of URL for matching',
+    `host_hash` VARCHAR(64) NULL COMMENT 'HMAC of host for remote desktop matching',
     `folder_id` INT UNSIGNED NULL,
     `is_favorite` TINYINT(1) DEFAULT 0,
     `password_strength` TINYINT UNSIGNED NULL COMMENT 'Score 0-100, calculated client-side',
@@ -74,6 +75,8 @@ CREATE TABLE IF NOT EXISTS `vault_items` (
     INDEX `idx_vault_folder` (`folder_id`),
     INDEX `idx_vault_favorite` (`is_favorite`),
     INDEX `idx_vault_weak` (`is_weak`),
+    INDEX `idx_vault_host_hash` (`host_hash`),
+    INDEX `idx_vault_last_used` (`user_id`, `last_used_at` DESC),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`folder_id`) REFERENCES `folders`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
