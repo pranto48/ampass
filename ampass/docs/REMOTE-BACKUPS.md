@@ -85,4 +85,15 @@ Generate cron token in Admin → Backups → Settings.
 
 ## Retention
 
-Configure `backup_remote_retention_count` to automatically delete old remote backups (keeps last N files matching `ampass-b
+Configure `backup_remote_retention_count` to automatically delete old remote backups (keeps last N files matching `ampass-backup-*.ampass-backup` pattern).
+
+## Restore from Remote Backup
+
+1. Download the `.ampass-backup` file from your remote storage
+2. Go to Admin → Backups → Upload and Restore
+3. Enter the backup password
+4. Choose restore mode
+
+## ⚠️ Not Production Ready
+
+AMPass remote backup system requires professional security audit before real credential storage.
