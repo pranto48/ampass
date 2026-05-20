@@ -503,6 +503,17 @@ class UpdateService {
      * Run pending database migrations.
      * Returns: ['applied' => [...], 'skipped' => [...], 'failed' => null|string]
      * SECURITY: Failed migrations are NEVER marked as applied.
+     *
+     * Supports two migration formats:
+     * 1. Pure SQL (.sql files) — executed via PDO::exec()
+     * 2. PHP migrations (.php files) — for complex/conditional logic that SQL alone cannot handle
+     *    (e.g., INFORMATION_SCHEMA checks, conditional ALTER TABLE)
+     *
+     * If both 006_example.sql and 006_example.php exist, the .php file takes precedence.
+     * PHP migration files must return true on success or throw an exception on failure.
+     *
+     * NOTE: SQL migrations containing DELIMITER or CREATE PROCEDURE are NOT supported
+     * by the PDO runner. Use PHP migrations for conditional/complex logic.
      */
     public static function runPendingMigrations(): array {
         $result = ['applied' => [], 'skipped' => [], 'failed' => null];
@@ -518,15 +529,30 @@ class UpdateService {
             `applied_at` DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-        $files = glob($migrationsDir . '/*.sql');
-        sort($files);
+        // Collect all migration files (.sql and .php), deduplicate by base name
+        $sqlFiles = glob($migrationsDir . '/*.sql') ?: [];
+        $phpFiles = glob($migrationsDir . '/*.php') ?: [];
 
-        foreach ($files as $file) {
-            $filename = basename($file);
+        // Build ordered list: if .php exists for a migration, it takes precedence over .sql
+        $migrations = [];
+        foreach ($sqlFiles as $file) {
+            $base = pathinfo($file, PATHINFO_FILENAME);
+            $migrations[$base] = ['file' => $file, 'type' => 'sql', 'filename' => basename($file)];
+        }
+        foreach ($phpFiles as $file) {
+            $base = pathinfo($file, PATHINFO_FILENAME);
+            // PHP takes precedence — overwrite SQL entry
+            $migrations[$base] = ['file' => $file, 'type' => 'php', 'filename' => basename($file)];
+        }
+        ksort($migrations); // Sort by filename prefix (001_, 002_, etc.)
 
-            // Check if already applied
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM schema_migrations WHERE filename = ?");
-            $stmt->execute([$filename]);
+        foreach ($migrations as $migration) {
+            $filename = $migration['filename'];
+
+            // Check if already applied (check both .sql and .php variants)
+            $baseName = pathinfo($filename, PATHINFO_FILENAME);
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM schema_migrations WHERE filename = ? OR filename = ? OR filename = ?");
+            $stmt->execute([$filename, $baseName . '.sql', $baseName . '.php']);
             if ($stmt->fetchColumn() > 0) {
                 $result['skipped'][] = $filename;
                 continue;
@@ -534,12 +560,21 @@ class UpdateService {
 
             // Run migration
             try {
-                $sql = file_get_contents($file);
-                if (empty(trim($sql))) {
-                    $result['skipped'][] = $filename;
-                    continue;
+                if ($migration['type'] === 'php') {
+                    // PHP migration: include the file which must return true or throw
+                    $migrationResult = require $migration['file'];
+                    if ($migrationResult !== true) {
+                        throw new \Exception("PHP migration did not return true");
+                    }
+                } else {
+                    // SQL migration: execute via PDO
+                    $sql = file_get_contents($migration['file']);
+                    if (empty(trim($sql))) {
+                        $result['skipped'][] = $filename;
+                        continue;
+                    }
+                    $pdo->exec($sql);
                 }
-                $pdo->exec($sql);
 
                 // ONLY mark as applied after successful execution
                 $stmt = $pdo->prepare("INSERT INTO schema_migrations (filename) VALUES (?)");
@@ -551,6 +586,10 @@ class UpdateService {
                 $result['failed'] = $filename . ': ' . $e->getMessage();
                 error_log("AMPass migration FAILED ({$filename}): " . $e->getMessage());
                 return $result; // Stop on first failure
+            } catch (\Exception $e) {
+                $result['failed'] = $filename . ': ' . $e->getMessage();
+                error_log("AMPass migration FAILED ({$filename}): " . $e->getMessage());
+                return $result;
             }
         }
 

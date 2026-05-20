@@ -181,12 +181,17 @@ async fn launch_application(path: String) -> Result<(), String> {
 
     let path_obj = std::path::Path::new(&path);
 
+    // Reject .bat and .cmd files (script injection risk)
+    let ext = path_obj.extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if ext == "bat" || ext == "cmd" || ext == "ps1" || ext == "vbs" || ext == "wsf" {
+        return Err(format!("Script files (.{}) are not allowed for security reasons. Only .exe, .msi, .lnk are supported.", ext));
+    }
+
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        let ext = path_obj.extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
 
         match ext.as_str() {
             "exe" | "msi" => {
@@ -370,12 +375,13 @@ async fn open_rdp_connection(host: String, port: u16, username: String, redirect
 }
 
 /// Pick an executable file using system file dialog.
+/// SECURITY: Only allows .exe, .msi, .lnk — no .bat/.cmd (script injection risk).
 #[tauri::command]
 async fn pick_executable(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let file = app.dialog()
         .file()
-        .add_filter("Executables", &["exe", "msi", "bat", "cmd", "lnk"])
+        .add_filter("Applications", &["exe", "msi", "lnk"])
         .add_filter("All Files", &["*"])
         .set_title("Select Application")
         .blocking_pick_file();
