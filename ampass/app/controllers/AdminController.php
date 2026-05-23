@@ -674,6 +674,7 @@ class AdminController {
             case 'one-click': $this->updatesOneClick(); return;
             case 'preflight': $this->updatesPreflight(); return;
             case 'sync-version': $this->updatesSyncVersion(); return;
+            case 'reset-installed': $this->updatesResetInstalled(); return;
         }
 
         $data = [
@@ -942,6 +943,24 @@ class AdminController {
         } else {
             Session::flash('error', 'Version check failed: ' . ($result['error'] ?? 'Unknown error'));
         }
+        header('Location: ' . APP_URL . '/admin/updates');
+        exit;
+    }
+
+    /**
+     * Reset installed commit SHA — forces next check to show update available.
+     * Use when installed_commit_sha was set incorrectly.
+     */
+    private function updatesResetInstalled(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
+
+        UpdateService::saveSetting('installed_commit_sha', '');
+        UpdateService::saveSetting('installed_commit_count', '');
+        UpdateService::saveSetting('update_available', '1');
+
+        AuditLog::log('update_installed_reset', Session::getUserId());
+        Session::flash('success', 'Installed commit reset. Click "Check GitHub" to detect available updates.');
         header('Location: ' . APP_URL . '/admin/updates');
         exit;
     }
