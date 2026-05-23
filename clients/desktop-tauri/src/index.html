@@ -30,13 +30,16 @@
       <div class="auth-card">
         <div class="auth-logo"><svg width="40" height="40" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="url(#lg2)"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/><defs><linearGradient id="lg2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#4338ca"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs></svg></div>
         <h2 class="auth-title">Sign In</h2>
+        <p id="loginServerInfo" class="field-hint" style="text-align:center;margin-bottom:8px;font-size:11px;color:#64748b;"></p>
         <div class="auth-form">
           <label class="field-label">Username or Email</label>
           <input type="text" id="loginUser" class="field-input" autocomplete="off">
           <label class="field-label">Password</label>
           <input type="password" id="loginPass" class="field-input" autocomplete="off">
+          <label class="checkbox-label" style="margin:8px 0;font-size:12px;"><input type="checkbox" id="loginTrustPC" checked> Trust this PC (stay signed in)</label>
           <button id="btnLogin" class="btn-primary">Sign In</button>
           <div id="loginErr" class="field-error"></div>
+          <button id="btnLoginChangeServer" class="btn-ghost-sm" style="margin-top:8px;font-size:11px;width:100%;">Change Server</button>
         </div>
       </div>
     </div>

@@ -89,6 +89,18 @@ async fn clear_derivation_params() -> Result<(), String> {
     storage::delete_secure_config("derivation_params")
 }
 
+/// Check if a trusted session exists (token + server_url + derivation_params).
+/// Used by frontend to decide whether to show Unlock or Login screen.
+#[tauri::command]
+async fn has_trusted_session(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let has_token = state.auth_token.lock().map_err(|e| e.to_string())?.is_some();
+    let has_url = state.server_url.lock().map_err(|e| e.to_string())?.is_some();
+    let has_params = storage::load_secure_config("derivation_params")
+        .map(|v| v.is_some())
+        .unwrap_or(false);
+    Ok(has_token && has_url && has_params)
+}
+
 #[tauri::command]
 async fn unlock_vault(vault_key_hex: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     // Store vault key in memory only
@@ -510,6 +522,7 @@ pub fn run() {
             store_derivation_params,
             load_derivation_params,
             clear_derivation_params,
+            has_trusted_session,
             unlock_vault,
             lock_vault,
             is_vault_locked,

@@ -35,6 +35,68 @@
     document.getElementById(id).style.display = id === 'viewMain' ? 'flex' : 'flex';
   }
 
+  /**
+   * Show server connection error with options to change URL, retry, or work offline.
+   */
+  function showServerError(currentUrl, errorMsg) {
+    ['viewWelcome','viewLogin','viewUnlock','viewMain'].forEach(v => document.getElementById(v).style.display = 'none');
+    // Reuse viewWelcome with error content
+    const card = document.querySelector('#viewWelcome .auth-card');
+    if (!card) { showAuth('viewWelcome'); return; }
+    card.innerHTML = `
+      <div class="auth-logo"><svg width="56" height="56" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#dc2626"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg></div>
+      <h1 class="auth-title">Server Connection Problem</h1>
+      <p class="auth-sub" style="margin-bottom:8px;">Cannot reach AMPass server</p>
+      <div style="background:#27272a;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;">
+        <div style="color:#a1a1aa;">Current server:</div>
+        <div style="color:#fafafa;word-break:break-all;">${currentUrl || 'Not set'}</div>
+        <div style="color:#ef4444;margin-top:6px;font-size:0.75rem;">${errorMsg || 'Server unreachable'}</div>
+      </div>
+      <div class="auth-form">
+        <label class="field-label">Change Server URL</label>
+        <input type="url" id="serverErrorUrl" class="field-input" value="${currentUrl || ''}" placeholder="https://ampass.arif.bd">
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button id="btnServerErrorSave" class="btn-primary" style="flex:1;">Save & Retry</button>
+          <button id="btnServerErrorRetry" class="btn-ghost-sm" style="padding:10px 16px;">Retry</button>
+        </div>
+        <button id="btnServerErrorOffline" class="btn-ghost-sm" style="margin-top:8px;width:100%;opacity:0.7;">Work Offline (cached vault)</button>
+      </div>
+      <p class="auth-warning">⚠️ Not professionally audited.</p>
+    `;
+    document.getElementById('viewWelcome').style.display = 'flex';
+
+    document.getElementById('btnServerErrorSave').addEventListener('click', async () => {
+      const newUrl = document.getElementById('serverErrorUrl').value.trim();
+      if (!newUrl) return;
+      const normalized = Api.normalizeServerUrl(newUrl);
+      await invoke('set_server_url', { url: normalized });
+      Api.setServerUrl(normalized);
+      // Clear old token if domain changed
+      if (currentUrl && new URL(normalized).host !== new URL(currentUrl).host) {
+        await invoke('logout');
+        Api.token = '';
+      }
+      location.reload();
+    });
+
+    document.getElementById('btnServerErrorRetry').addEventListener('click', () => location.reload());
+
+    document.getElementById('btnServerErrorOffline').addEventListener('click', async () => {
+      // Try to load from offline cache
+      if (derivationParams) {
+        showAuth('viewUnlock');
+      } else {
+        const storedParams = await invoke('load_derivation_params');
+        if (storedParams) {
+          derivationParams = JSON.parse(storedParams);
+          showAuth('viewUnlock');
+        } else {
+          alert('No offline data available. Please connect to server first.');
+        }
+      }
+    });
+  }
+
   function showPage(name) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const page = document.getElementById('page' + name.charAt(0).toUpperCase() + name.slice(1));
@@ -53,7 +115,13 @@
       const state = await invoke('get_app_state');
       if (!state.configured) { showAuth('viewWelcome'); return; }
       Api.setServerUrl(state.server_url);
-      if (!state.authenticated) { showAuth('viewLogin'); return; }
+      if (!state.authenticated) {
+        // Show server info on login screen
+        const infoEl = document.getElementById('loginServerInfo');
+        if (infoEl && state.server_url) { try { infoEl.textContent = 'Server: ' + new URL(state.server_url).host; } catch { infoEl.textContent = 'Server: ' + state.server_url; } }
+        showAuth('viewLogin');
+        return;
+      }
       Api.token = (await invoke('get_auth_token')) || '';
 
       // Prefer locally encrypted trusted-device params so restart goes straight to Unlock.
@@ -73,11 +141,23 @@
             await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
           }
         } catch (e) {
-          // Token may be expired — redirect to login
-          await invoke('clear_derivation_params');
-          showAuth('viewLogin');
+          if (e.code === 'AUTH_REQUIRED' || e.code === 'AUTH_HEADER_MISSING') {
+            // Token expired/revoked — must login again
+            await invoke('clear_derivation_params');
+            document.getElementById('loginErr').textContent = 'Trusted PC session expired. Please sign in again.';
+            showAuth('viewLogin');
+            return;
+          }
+          // Network error — show server connection problem, not login
+          showServerError(Api.serverUrl || state.server_url, e.message);
           return;
         }
+      }
+
+      // If still no derivation params and no network, allow offline if cache exists
+      if (!derivationParams) {
+        showServerError(Api.serverUrl || state.server_url, 'Cannot load vault parameters. Server may be offline.');
+        return;
       }
 
       if (state.locked) { showAuth('viewUnlock'); return; }
@@ -93,6 +173,9 @@
     const serverUrl = Api.normalizeServerUrl(url);
     await invoke('set_server_url', { url: serverUrl });
     Api.setServerUrl(serverUrl);
+    // Show server info on login screen
+    const infoEl = document.getElementById('loginServerInfo');
+    if (infoEl) { try { infoEl.textContent = 'Server: ' + new URL(serverUrl).host; } catch { infoEl.textContent = 'Server: ' + serverUrl; } }
     showAuth('viewLogin');
   });
 
@@ -100,6 +183,7 @@
   document.getElementById('btnLogin').addEventListener('click', async () => {
     const user = document.getElementById('loginUser').value.trim();
     const pass = document.getElementById('loginPass').value;
+    const trustPC = document.getElementById('loginTrustPC')?.checked ?? true;
     if (!user || !pass) return;
     document.getElementById('loginErr').textContent = '';
     try {
@@ -107,7 +191,11 @@
       Api.token = result.token;
       await invoke('store_auth_token', { token: result.token });
       derivationParams = result.derivation_params;
-      await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
+      if (trustPC) {
+        await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
+        // Save user info for display on unlock screen
+        await invoke('save_vault_cache', { encryptedItemsJson: '' }); // ensure cache file exists
+      }
       document.getElementById('loginPass').value = '';
       showAuth('viewUnlock');
     } catch (e) {
@@ -116,6 +204,11 @@
     }
   });
   document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnLogin').click(); });
+
+  // Login: Change Server button
+  document.getElementById('btnLoginChangeServer').addEventListener('click', () => {
+    showAuth('viewWelcome');
+  });
 
   // ===== Unlock =====
   document.getElementById('btnUnlock').addEventListener('click', async () => {

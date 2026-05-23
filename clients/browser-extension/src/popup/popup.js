@@ -86,6 +86,7 @@
       }
     } else if (!status.unlocked) {
       showView('unlock');
+      showTrustedInfo(status);
       if (!status.online) {
         showStatus('⚡ Offline Mode — using encrypted cached vault', 'warning');
       }
@@ -171,9 +172,42 @@
 
   // Reset connection button
   document.getElementById('btnResetConn').addEventListener('click', async () => {
+    if (!confirm('This will remove trusted browser login and offline cache. Continue?')) return;
     await sendMsg('RESET_EXTENSION');
     showView('setup');
   });
+
+  // Unlock screen: Sign Out button
+  document.getElementById('btnUnlockSignOut').addEventListener('click', async () => {
+    await sendMsg('LOGOUT');
+    showView('login');
+  });
+
+  // Unlock screen: Change Server button
+  document.getElementById('btnUnlockChangeServer').addEventListener('click', async () => {
+    if (!confirm('This will sign you out and let you enter a new server URL. Continue?')) return;
+    await sendMsg('RESET_EXTENSION');
+    showView('setup');
+  });
+
+  /**
+   * Show trusted browser info on unlock screen.
+   */
+  function showTrustedInfo(status) {
+    const infoEl = document.getElementById('unlockTrustInfo');
+    if (!infoEl) return;
+    let text = '';
+    if (status.serverUrl) {
+      try { text = 'Server: ' + new URL(status.serverUrl).host; } catch { text = 'Server: ' + status.serverUrl; }
+    }
+    if (status.authenticated) {
+      text = '🔒 Trusted browser' + (text ? ' • ' + text : '');
+    }
+    if (text) {
+      infoEl.textContent = text;
+      infoEl.style.display = '';
+    }
+  }
 
   // ===== Unlock =====
   els.btnUnlock.addEventListener('click', async () => {
