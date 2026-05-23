@@ -194,7 +194,8 @@
       if (trustPC) {
         await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
         // Save user info for display on unlock screen
-        await invoke('save_vault_cache', { encryptedItemsJson: '' }); // ensure cache file exists
+        const userSummary = { username: result.user?.username || user, email: result.user?.email || '', full_name: result.user?.full_name || '' };
+        await invoke('save_user_summary', { userJson: JSON.stringify(userSummary) });
       }
       document.getElementById('loginPass').value = '';
       showAuth('viewUnlock');
@@ -211,6 +212,25 @@
   });
 
   // ===== Unlock =====
+  // Show trusted PC info on unlock screen
+  (async function showUnlockInfo() {
+    try {
+      const userJson = await invoke('load_user_summary');
+      const state = await invoke('get_app_state');
+      const infoEl = document.getElementById('unlockTrustInfo');
+      if (!infoEl) return;
+      let parts = [];
+      if (userJson) {
+        const user = JSON.parse(userJson);
+        parts.push('Trusted PC: ' + (user.username || user.email || ''));
+      }
+      if (state.server_url) {
+        try { parts.push('Server: ' + new URL(state.server_url).host); } catch { parts.push('Server: ' + state.server_url); }
+      }
+      if (parts.length > 0) infoEl.textContent = parts.join(' • ');
+    } catch {}
+  })();
+
   document.getElementById('btnUnlock').addEventListener('click', async () => {
     const pass = document.getElementById('unlockPass').value;
     if (!pass) return;
@@ -238,6 +258,19 @@
     }
   });
   document.getElementById('unlockPass').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnUnlock').click(); });
+
+  // Unlock screen: Sign Out
+  document.getElementById('btnUnlockSignOut').addEventListener('click', async () => {
+    await invoke('clear_trusted_pc');
+    Api.token = '';
+    derivationParams = null;
+    showAuth('viewLogin');
+  });
+
+  // Unlock screen: Change Server
+  document.getElementById('btnUnlockChangeServer').addEventListener('click', () => {
+    showAuth('viewWelcome');
+  });
 
   async function initializeVault(masterPassword) {
     const vaultKeyRaw = Crypto.bufToHex(crypto.getRandomValues(new Uint8Array(32)));

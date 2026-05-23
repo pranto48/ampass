@@ -163,6 +163,24 @@ const NativeClient = {
   },
 
   /**
+   * Open/focus the desktop app unlock window.
+   * SECURITY: Does not pass any secrets. Only tells desktop to show unlock UI.
+   */
+  async openUnlockWindow(reason = 'browser_request', pageHost = '') {
+    return await this.sendMessage({
+      type: 'open_unlock_window',
+      payload: { reason, page_url_host: pageHost }
+    }, 10000); // longer timeout for app launch
+  },
+
+  /**
+   * Focus the main desktop window
+   */
+  async focusMainWindow() {
+    return await this.sendMessage({ type: 'focus_main_window' });
+  },
+
+  /**
    * Request vault unlock (user must unlock in desktop app)
    */
   async requestUnlock() {

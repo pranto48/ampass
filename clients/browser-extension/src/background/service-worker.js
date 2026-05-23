@@ -82,6 +82,8 @@ async function handleMessage(msg, sender) {
       // Chrome doesn't allow programmatic popup opening from content scripts.
       // Return a message telling the user to click the icon.
       return { success: false, error: 'Click the AMPass extension icon to open.' };
+    case 'OPEN_DESKTOP_UNLOCK':
+      return await openDesktopUnlock(msg.payload || {});
     default:
       return { success: false, error: 'Unknown message type' };
   }
@@ -263,7 +265,7 @@ async function unlock(payload) {
 
   // Set up auto-lock alarm
   const settings = await Storage.getSettings();
-  const timeout = settings.lockTimeoutMinutes || 15;
+  const timeout = settings.lockTimeoutMinutes || 30;
   chrome.alarms.create('autoLock', { delayInMinutes: timeout });
 
   return { success: true, offline, itemCount: (cachedVaultItems || []).length };
@@ -457,6 +459,29 @@ async function decryptItem(id) {
 }
 
 /**
+ * Try to open the AMPass desktop app unlock window via native messaging bridge.
+ * SECURITY: Does not send any secrets. Only tells desktop to show unlock UI.
+ */
+async function openDesktopUnlock(payload) {
+  try {
+    const available = await NativeClient.isAvailable();
+    if (!available) {
+      return { success: false, error: 'AMPass Desktop bridge not available. Open AMPass Desktop manually or click the extension icon.' };
+    }
+    const response = await NativeClient.openUnlockWindow(
+      payload.reason || 'browser_autofill',
+      payload.pageHost || ''
+    );
+    if (response && response.success) {
+      return { success: true, vault_locked: response.data?.vault_locked ?? true };
+    }
+    return { success: false, error: 'Desktop app did not respond' };
+  } catch (e) {
+    return { success: false, error: 'Cannot reach AMPass Desktop: ' + (e.message || 'connection failed') };
+  }
+}
+
+/**
  * Log a usage action to the server (non-blocking).
  * SECURITY: Never logs plaintext credentials. Only item_id, action, client_type.
  */
@@ -594,7 +619,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 chrome.runtime.onMessage.addListener(() => {
   // Any message resets the auto-lock timer
   Storage.getSettings().then(settings => {
-    const timeout = settings.lockTimeoutMinutes || 15;
+    const timeout = settings.lockTimeoutMinutes || 30;
     chrome.alarms.create('autoLock', { delayInMinutes: timeout });
   });
 });

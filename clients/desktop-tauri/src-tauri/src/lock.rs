@@ -6,7 +6,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
-const DEFAULT_LOCK_TIMEOUT_SECS: u64 = 900; // 15 minutes
+const DEFAULT_LOCK_TIMEOUT_SECS: u64 = 1800; // 30 minutes
 
 /// Set up a background task that checks for idle timeout
 pub fn setup_lock_checker(app_handle: AppHandle) {

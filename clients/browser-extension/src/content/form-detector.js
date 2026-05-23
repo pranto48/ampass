@@ -429,9 +429,20 @@
       msg.querySelector('#ampass-inline-btn').addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Try to open popup (may not work from content script in all browsers)
-        chrome.runtime.sendMessage({ type: 'OPEN_POPUP' }).catch(() => {});
-        removeAmpassDropdown();
+        // Try to open desktop app unlock window via native bridge
+        chrome.runtime.sendMessage({ type: 'OPEN_DESKTOP_UNLOCK', payload: { pageHost: window.location.hostname } }).then(response => {
+          if (response && response.success) {
+            removeAmpassDropdown();
+            showAmpassToast('Opening AMPass Desktop...', 'info');
+          } else {
+            // Desktop bridge not available — show fallback
+            removeAmpassDropdown();
+            showAmpassInlineMessage(icon, 'Click the AMPass extension icon to unlock, or open AMPass Desktop.', null);
+          }
+        }).catch(() => {
+          removeAmpassDropdown();
+          showAmpassInlineMessage(icon, 'Click the AMPass extension icon to unlock.', null);
+        });
       });
     }
 

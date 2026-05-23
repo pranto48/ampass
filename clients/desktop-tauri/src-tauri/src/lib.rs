@@ -101,6 +101,32 @@ async fn has_trusted_session(state: tauri::State<'_, AppState>) -> Result<bool, 
     Ok(has_token && has_url && has_params)
 }
 
+/// Save user display info (username/email) for trusted PC unlock screen.
+/// SECURITY: Only stores display name, never passwords or keys.
+#[tauri::command]
+async fn save_user_summary(user_json: String) -> Result<(), String> {
+    storage::save_secure_config("user_summary", &user_json)
+}
+
+/// Load user display info for trusted PC unlock screen.
+#[tauri::command]
+async fn load_user_summary() -> Result<Option<String>, String> {
+    storage::load_secure_config("user_summary")
+}
+
+/// Clear all trusted PC data (token, derivation params, user summary).
+/// Called on explicit sign-out or token revocation.
+#[tauri::command]
+async fn clear_trusted_pc(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    *state.vault_key.lock().map_err(|e| e.to_string())? = None;
+    *state.auth_token.lock().map_err(|e| e.to_string())? = None;
+    *state.locked.lock().map_err(|e| e.to_string())? = true;
+    let _ = keychain::delete_token();
+    let _ = storage::delete_secure_config("derivation_params");
+    let _ = storage::delete_secure_config("user_summary");
+    Ok(())
+}
+
 #[tauri::command]
 async fn unlock_vault(vault_key_hex: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     // Store vault key in memory only
@@ -523,6 +549,9 @@ pub fn run() {
             load_derivation_params,
             clear_derivation_params,
             has_trusted_session,
+            save_user_summary,
+            load_user_summary,
+            clear_trusted_pc,
             unlock_vault,
             lock_vault,
             is_vault_locked,

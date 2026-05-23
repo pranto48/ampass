@@ -20,6 +20,8 @@ const ALLOWED_TYPES: &[&str] = &[
     "ping",
     "get_status",
     "unlock_request",
+    "open_unlock_window",
+    "focus_main_window",
     "lock",
     "search_by_domain",
     "get_item_for_autofill",
@@ -167,6 +169,28 @@ pub fn process_message(
                     "unlocked": true
                 }), rid)
             }
+        }
+
+        "open_unlock_window" => {
+            // Request to show/focus the desktop app unlock window.
+            // The actual window show/focus is handled by the caller via the returned action.
+            // SECURITY: Does not unlock vault — just opens the UI for user to enter master password.
+            let reason = msg.payload.get("reason").and_then(|v| v.as_str()).unwrap_or("browser_request");
+            let page_host = msg.payload.get("page_url_host").and_then(|v| v.as_str()).unwrap_or("");
+            NativeResponse::ok("open_unlock_window", serde_json::json!({
+                "action": "show_unlock",
+                "vault_locked": vault_locked,
+                "reason": reason,
+                "page_host": page_host
+            }), rid)
+        }
+
+        "focus_main_window" => {
+            // Request to focus/show the main desktop window
+            NativeResponse::ok("focus_main_window", serde_json::json!({
+                "action": "focus_window",
+                "vault_locked": vault_locked
+            }), rid)
         }
 
         "search_by_domain" | "get_item_for_autofill" | "save_detected_login" | "update_detected_login" => {

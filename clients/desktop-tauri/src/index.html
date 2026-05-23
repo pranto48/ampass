@@ -48,11 +48,16 @@
       <div class="auth-card">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         <h2 class="auth-title">Unlock Vault</h2>
+        <p id="unlockTrustInfo" class="field-hint" style="text-align:center;font-size:11px;color:#64748b;margin-bottom:8px;"></p>
         <div class="auth-form">
           <label class="field-label">Master Password</label>
           <input type="password" id="unlockPass" class="field-input" autocomplete="off">
           <button id="btnUnlock" class="btn-primary">Unlock</button>
           <div id="unlockErr" class="field-error"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+            <button id="btnUnlockSignOut" class="btn-ghost-sm" style="font-size:11px;">Sign Out</button>
+            <button id="btnUnlockChangeServer" class="btn-ghost-sm" style="font-size:11px;">Change Server</button>
+          </div>
         </div>
       </div>
     </div>
