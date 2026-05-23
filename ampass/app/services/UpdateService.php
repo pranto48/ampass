@@ -38,7 +38,7 @@ class UpdateService {
     public static function checkForUpdates(): array {
         $owner = self::getSetting('github_repo_owner', 'pranto48');
         $repo = self::getSetting('github_repo_name', 'ampass-secure-vault');
-        $sourceType = self::getSetting('update_source_type', 'github_release');
+        $sourceType = self::getSetting('update_source_type', 'github_branch_zip');
         $branch = self::getSetting('github_branch', 'main');
         $token = self::getGitHubToken();
 
@@ -136,7 +136,7 @@ class UpdateService {
         // Record update start
         $updateId = Database::insert(
             "INSERT INTO update_history (from_version, to_version, from_commit_sha, to_commit_sha, update_source, status, started_by_user_id, started_at) VALUES (?, ?, ?, ?, ?, 'started', ?, NOW())",
-            [$currentVersion, $latestVersion, self::getSetting('installed_commit_sha', ''), self::getSetting('latest_commit_sha', ''), self::getSetting('update_source_type', 'github_release'), $adminUserId]
+            [$currentVersion, $latestVersion, self::getSetting('installed_commit_sha', ''), self::getSetting('latest_commit_sha', ''), self::getSetting('update_source_type', 'github_branch_zip'), $adminUserId]
         );
 
         try {
@@ -813,7 +813,7 @@ class UpdateService {
     private static function getDownloadUrl(): string {
         $owner = self::getSetting('github_repo_owner', 'pranto48');
         $repo = self::getSetting('github_repo_name', 'ampass-secure-vault');
-        $sourceType = self::getSetting('update_source_type', 'github_release');
+        $sourceType = self::getSetting('update_source_type', 'github_branch_zip');
         if ($sourceType === 'github_release') {
             $v = self::getSetting('latest_version', '');
             return $v ? "https://github.com/{$owner}/{$repo}/archive/refs/tags/v{$v}.zip" : '';

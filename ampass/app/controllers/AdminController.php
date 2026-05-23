@@ -673,6 +673,7 @@ class AdminController {
             case 'mark-installed': $this->updatesMarkInstalled(); return;
             case 'one-click': $this->updatesOneClick(); return;
             case 'preflight': $this->updatesPreflight(); return;
+            case 'sync-version': $this->updatesSyncVersion(); return;
         }
 
         $data = [
@@ -922,6 +923,20 @@ class AdminController {
         } else {
             $msg = count($blockers) . ' blocker(s): ' . implode(', ', array_map(fn($c) => $c['name'], $blockers));
             Session::flash('error', $msg);
+        }
+        header('Location: ' . APP_URL . '/admin/updates');
+        exit;
+    }
+
+    private function updatesSyncVersion(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . APP_URL . '/admin/updates'); exit; }
+        CSRF::validateOrRedirect(APP_URL . '/admin/updates');
+
+        $result = UpdateService::syncVersionFromGitHub();
+        if ($result['success']) {
+            Session::flash('success', 'Version synced: ' . ($result['display'] ?? '') . ' (commit ' . substr($result['sha'] ?? '', 0, 8) . ', #' . ($result['commit_count'] ?? '') . ')');
+        } else {
+            Session::flash('error', 'Version sync failed: ' . ($result['error'] ?? 'Unknown error'));
         }
         header('Location: ' . APP_URL . '/admin/updates');
         exit;

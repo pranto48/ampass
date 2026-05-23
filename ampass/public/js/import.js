@@ -115,7 +115,10 @@
         }
         currentLogin = { username: line.substring(6).trim(), password: '', warnings: [] };
       } else if (line.startsWith('Password:') && current && currentLogin) {
-        currentLogin.password = line.substring(9).trim();
+        // Keep everything after "Password:" — only strip one optional leading space
+        let raw = line.substring('Password:'.length);
+        if (raw.startsWith(' ')) raw = raw.substring(1);
+        currentLogin.password = raw;
         items.push(buildStickyItem(current, currentLogin));
         currentLogin = null;
       }
