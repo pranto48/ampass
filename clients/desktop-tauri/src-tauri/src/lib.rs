@@ -542,6 +542,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             get_app_state,

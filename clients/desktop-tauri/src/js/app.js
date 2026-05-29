@@ -28,6 +28,7 @@
   let derivationParams = null;
   let searchKey = null; // Derived from vault key for title_hash/url_hash
   let allDecrypted = [];
+  let appSettings = { lockTimeoutMin: 15, clipboardClearSec: 30 };
 
   // ===== Views =====
   function showAuth(id) {
@@ -135,7 +136,7 @@
       // If the encrypted local params are missing, fetch once and store them.
       if (!derivationParams && Api.token) {
         try {
-          const paramResult = await Api.request('derivationParams');
+          const paramResult = await Api.derivationParams();
           if (paramResult.success && paramResult.params) {
             derivationParams = paramResult.params;
             await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
@@ -303,6 +304,8 @@
     renderRemoteDesktop();
     renderIdentities();
     renderMemos();
+    await renderBookmarks();
+    await renderSharing();
     updateSyncTime();
     await invoke('record_activity');
   }
@@ -357,6 +360,66 @@
   function renderMemos() {
     const items = allDecrypted.filter(i => i._type === 'secure_note');
     document.getElementById('memosList').innerHTML = items.length ? items.map(i => itemRow(i)).join('') : '<p class="empty-hint">No secure memos</p>';
+  }
+
+  function renderBookmarks() {
+    // Bookmarks: vault items tagged as bookmarks OR items of type 'login' pinned as favorites
+    const items = allDecrypted.filter(i => i._fav && i._type === 'login');
+    const el = document.getElementById('bookmarksList');
+    if (!el) return;
+    el.innerHTML = items.length
+      ? items.map(i => `<div class="item-row" data-id="${i._id}">
+          <div class="item-icon">🔖</div>
+          <div class="item-info">
+            <span class="item-title">${esc(i.title || 'Untitled')}</span>
+            <span class="item-sub">${esc(i.username || i.url || '')}</span>
+          </div>
+          <div class="item-actions">
+            <button class="btn-ghost-sm" data-copy-user="${i._id}" title="Copy username">👤</button>
+            <button class="btn-ghost-sm" data-copy-pass="${i._id}" title="Copy password">📋</button>
+            ${i.url ? `<button class="btn-ghost-sm" onclick="window.__TAURI__?.shell?.open('${esc(i.url)}')" title="Open URL">🌐</button>` : ''}
+          </div>
+        </div>`).join('')
+      : '<p class="empty-hint">No bookmarks yet. Mark a Web Account as ⭐ Favorite to pin it here.</p>';
+  }
+
+  async function renderSharing() {
+    const el = document.getElementById('sharingList');
+    if (!el) return;
+    // Try to fetch shared items from server API
+    try {
+      const result = await Api.shareList();
+      const received = (result.received || []);
+      const sent = (result.sent || []);
+      let html = '';
+      if (received.length === 0 && sent.length === 0) {
+        el.innerHTML = '<p class="empty-hint">No shared credentials. Use the web vault to share items with other AMPass users.</p>';
+        return;
+      }
+      if (received.length > 0) {
+        html += '<h3 class="section-title">Received</h3>';
+        html += received.map(s => `<div class="item-row">
+          <div class="item-icon">📨</div>
+          <div class="item-info">
+            <span class="item-title">${esc(s.title || 'Shared Item')}</span>
+            <span class="item-sub">From: ${esc(s.shared_by || 'Unknown')} &bull; ${esc(s.status || 'pending')}</span>
+          </div>
+        </div>`).join('');
+      }
+      if (sent.length > 0) {
+        html += '<h3 class="section-title">Sent</h3>';
+        html += sent.map(s => `<div class="item-row">
+          <div class="item-icon">📤</div>
+          <div class="item-info">
+            <span class="item-title">${esc(s.title || 'Shared Item')}</span>
+            <span class="item-sub">To: ${esc(s.shared_with || 'Unknown')} &bull; ${esc(s.status || 'pending')}</span>
+          </div>
+        </div>`).join('');
+      }
+      el.innerHTML = html;
+    } catch {
+      el.innerHTML = '<p class="empty-hint">Sharing data unavailable offline.</p>';
+    }
   }
 
   function appAccountRow(item) {
@@ -604,11 +667,69 @@
   document.getElementById('btnRegenerate').addEventListener('click', genPw);
   document.getElementById('genLen').addEventListener('input', (e) => { document.getElementById('genLenVal').textContent = e.target.value; genPw(); });
   document.getElementById('btnCopyGen').addEventListener('click', async () => { await navigator.clipboard.writeText(document.getElementById('genPw').value); toast('Copied!'); });
+  // Save generated password as a new vault item
+  document.getElementById('btnSaveGenerated').addEventListener('click', () => {
+    const pw = document.getElementById('genPw').value;
+    if (!pw) { genPw(); }
+    // Open add modal pre-filled with generated password
+    showAddModal('login');
+    // Pre-fill password field after modal renders
+    setTimeout(() => {
+      const passField = document.getElementById('addPass');
+      if (passField) passField.value = document.getElementById('genPw').value;
+    }, 50);
+  });
 
   // ===== Settings =====
+
+  // Load persisted settings on startup
+  async function loadSettings() {
+    try {
+      const raw = await invoke('load_derivation_params'); // reuse secure config slot
+      // Use a dedicated settings key via save_config instead
+      const stored = await storage_load_settings();
+      if (stored) {
+        appSettings = { ...appSettings, ...stored };
+        const lockEl = document.getElementById('setLockMin');
+        const clipEl = document.getElementById('setClipSec');
+        if (lockEl) lockEl.value = appSettings.lockTimeoutMin;
+        if (clipEl) clipEl.value = appSettings.clipboardClearSec;
+      }
+    } catch {}
+  }
+
+  async function storage_load_settings() {
+    try {
+      const val = await invoke('load_derivation_params'); // placeholder — use local storage workaround
+      const ls = localStorage.getItem('ampass_settings');
+      return ls ? JSON.parse(ls) : null;
+    } catch { return null; }
+  }
+
+  function saveSettings() {
+    appSettings.lockTimeoutMin = parseInt(document.getElementById('setLockMin')?.value || '15');
+    appSettings.clipboardClearSec = parseInt(document.getElementById('setClipSec')?.value || '30');
+    localStorage.setItem('ampass_settings', JSON.stringify(appSettings));
+    toast('Settings saved');
+  }
+
+  document.getElementById('setLockMin')?.addEventListener('change', saveSettings);
+  document.getElementById('setClipSec')?.addEventListener('change', saveSettings);
+
+  // Show server URL in settings
+  async function refreshSettingsUrl() {
+    const state = await invoke('get_app_state').catch(() => ({}));
+    const el = document.getElementById('settingUrl');
+    if (el && state.server_url) el.textContent = state.server_url;
+  }
+
   document.getElementById('btnLogout').addEventListener('click', async () => { try { await Api.logout(); } catch {} await invoke('logout'); await invoke('clear_derivation_params'); vaultKeyHex = null; searchKey = null; allDecrypted = []; derivationParams = null; Api.token = ''; showAuth('viewLogin'); });
   document.getElementById('btnWipeCache').addEventListener('click', async () => { if (!confirm('Wipe all local data?')) return; await invoke('wipe_local_data'); vaultKeyHex = null; searchKey = null; allDecrypted = []; derivationParams = null; showAuth('viewWelcome'); });
   document.getElementById('btnExportBackup').addEventListener('click', async () => { const data = JSON.stringify({ version: '1.0', exported_at: new Date().toISOString(), items: vaultItems }); await invoke('pick_save_location', { data }); toast('Backup exported'); });
+
+  // Load settings and server URL on startup
+  loadSettings();
+  refreshSettingsUrl();
 
   // ===== Tauri Events =====
   listen('tray-lock', async () => { vaultKeyHex = null; searchKey = null; allDecrypted = []; await invoke('lock_vault'); await refreshUnlockInfo(); showAuth('viewUnlock'); });

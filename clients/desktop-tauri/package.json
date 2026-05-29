@@ -1,0 +1,13 @@
+{
+  "name": "ampass-desktop",
+  "version": "1.72.0",
+  "description": "AMPass Password Manager - Desktop App",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

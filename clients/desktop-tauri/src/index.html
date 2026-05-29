@@ -233,9 +233,16 @@
             <p class="empty-hint">Detailed security analysis coming in a future update.</p>
           </div>
 
-          <!-- Sharing / Bookmarks (placeholders) -->
-          <div id="pageSharing" class="page"><div class="page-header"><h1>Sharing Center</h1></div><p class="empty-hint">Shared credentials will appear here.</p></div>
-          <div id="pageBookmarks" class="page"><div class="page-header"><h1>Bookmarks</h1></div><p class="empty-hint">Saved bookmarks will appear here.</p></div>
+          <!-- Sharing / Bookmarks -->
+          <div id="pageSharing" class="page">
+            <div class="page-header"><h1>Sharing Center</h1></div>
+            <div id="sharingList" class="item-table"><p class="empty-hint">Loading shared items...</p></div>
+          </div>
+          <div id="pageBookmarks" class="page">
+            <div class="page-header"><h1>Bookmarks</h1></div>
+            <p style="font-size:12px;color:#64748b;padding:0 20px 8px;">Favorited web accounts appear here as quick-access bookmarks.</p>
+            <div id="bookmarksList" class="item-table"><p class="empty-hint">No bookmarks yet.</p></div>
+          </div>
         </div>
 
         <!-- Bottom Action Bar -->

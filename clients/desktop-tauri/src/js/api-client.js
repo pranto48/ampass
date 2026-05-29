@@ -48,5 +48,7 @@ const Api = {
   async updateItem(data) { return this.request('vault/update', { body: data }); },
   async deleteItem(id) { return this.request('vault/delete', { body: { id } }); },
   async usageLog(itemId, action, clientType) { return this.request('vault/usage-log', { body: { item_id: itemId, action, client_type: clientType || 'desktop' } }); },
-  async status() { return this.request('status'); }
+  async status() { return this.request('status'); },
+  async derivationParams() { return this.request('derivation-params'); },
+  async shareList() { return this.request('share/list'); }
 };
