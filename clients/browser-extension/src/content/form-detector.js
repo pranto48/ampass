@@ -845,7 +845,7 @@
     for (const mutation of mutations) {
       if (mutation.addedNodes.length > 0) {
         for (const node of mutation.addedNodes) {
-          if (node.nodeType === 1 && (node.querySelector('input[type="password"]') || node.matches?.('input[type="password"]'))) {
+          if (node.nodeType === 1 && (node.querySelector('input, select') || node.matches?.('input, select'))) {
             hasNewInputs = true;
             break;
           }

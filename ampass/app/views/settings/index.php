@@ -114,6 +114,13 @@ $error = Session::flash('error');
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </button>
+                <a href="<?= APP_URL ?>/import" class="settings-link">
+                    <div class="settings-link-info">
+                        <span class="settings-link-title">Import External Data</span>
+                        <span class="settings-link-desc">Import from Sticky Password, Chrome, Edge, Firefox (CSV/TXT)</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </a>
             </div>
             <input type="file" id="importFileInput" accept=".json" style="display:none">
         </div>

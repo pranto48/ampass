@@ -563,7 +563,7 @@ async function saveItem(payload) {
 
   try {
     const result = await ApiClient.saveVaultItem({
-      item_type: 'login',
+      item_type: payload.itemData.item_type || 'login',
       encrypted_data: encrypted.ciphertext,
       encryption_iv: encrypted.iv,
       url_hash: urlHash,
@@ -594,7 +594,7 @@ async function updateItem(payload) {
 
   const result = await ApiClient.updateVaultItem({
     id: payload.id,
-    item_type: 'login',
+    item_type: payload.itemData.item_type || 'login',
     encrypted_data: encrypted.ciphertext,
     encryption_iv: encrypted.iv,
     url_hash: urlHash,
