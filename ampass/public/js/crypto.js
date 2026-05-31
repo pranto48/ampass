@@ -11,6 +11,20 @@
 const AMPassCrypto = (function() {
     'use strict';
 
+    // Clean window.AMPass.baseUrl to be relative to avoid cross-origin cookie issues
+    if (typeof window !== 'undefined' && window.AMPass && window.AMPass.baseUrl) {
+        let base = window.AMPass.baseUrl;
+        if (base.startsWith('http://') || base.startsWith('https://')) {
+            try {
+                const urlObj = new URL(base);
+                base = urlObj.pathname;
+            } catch (e) {}
+        }
+        if (base === '/') base = '';
+        if (base.endsWith('/')) base = base.slice(0, -1);
+        window.AMPass.baseUrl = base;
+    }
+
     const ALGORITHM = 'AES-GCM';
     const KEY_LENGTH = 256;
     const IV_LENGTH = 12; // 96 bits for AES-GCM
