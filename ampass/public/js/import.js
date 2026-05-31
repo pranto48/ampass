@@ -9,6 +9,25 @@
 
   let parsedItems = [];
   let selectedSource = '';
+  let vaultKeyReady = false;
+
+  // CRITICAL: Ensure vault key is available before any import operation
+  async function ensureVaultKey() {
+    if (vaultKeyReady) return true;
+    if (typeof AMPassCrypto === 'undefined') return false;
+    if (AMPassCrypto.isUnlocked()) { vaultKeyReady = true; return true; }
+    // Try restoring from sessionStorage
+    try {
+      const restored = await AMPassCrypto.restoreVaultKey();
+      vaultKeyReady = restored;
+      return restored;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Try restoring vault key immediately
+  ensureVaultKey();
 
   const els = {
     source: document.getElementById('importSource'),
@@ -83,6 +102,14 @@
         try {
           if (selectedSource === 'sticky_password') {
             parsedItems = parseStickyPasswordTxt(text);
+          } else if (selectedSource === 'lastpass') {
+            parsedItems = parseLastPassCsv(text);
+          } else if (selectedSource === 'bitwarden') {
+            parsedItems = parseBitwardenCsv(text);
+          } else if (selectedSource === '1password') {
+            parsedItems = parse1PasswordCsv(text);
+          } else if (selectedSource === 'keepass') {
+            parsedItems = parseKeePassCsv(text);
           } else {
             parsedItems = parseBrowserCsv(text, selectedSource);
           }
@@ -339,8 +366,9 @@
     if (selected.length === 0) { alert('No items selected for import.'); return; }
 
     // Verify vault is unlocked
-    if (typeof AMPassCrypto === 'undefined' || !AMPassCrypto.isUnlocked()) {
-      alert('Import failed: Vault is locked or decryption key is not available. Please ensure your vault is unlocked.');
+    const keyReady = await ensureVaultKey();
+    if (!keyReady) {
+      alert('Import failed: Vault is locked or decryption key is not available.\n\nPlease go to your Vault page, unlock it, then come back here to import.');
       els.btnImport.disabled = false;
       return;
     }
@@ -390,6 +418,7 @@
             });
           } catch (e) {
             totalFailed++;
+            serverErrors.push('Encryption failed for "' + (item.title || 'Untitled').substring(0, 40) + '": ' + (e.message || 'Unknown error'));
           }
         }
 
@@ -473,4 +502,188 @@
   }
 
   function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ===== LastPass CSV Parser =====
+  // LastPass exports: url,username,password,totp,extra,name,grouping,fav
+  function parseLastPassCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    const rows = parseCsvRows(text);
+    if (rows.length < 2) throw new Error('CSV file is empty or has no data rows');
+
+    const headers = rows[0].map(h => h.toLowerCase().trim());
+    const urlCol = findCol(headers, ['url']);
+    const userCol = findCol(headers, ['username', 'user']);
+    const passCol = findCol(headers, ['password']);
+    const nameCol = findCol(headers, ['name', 'title']);
+    const noteCol = findCol(headers, ['extra', 'notes']);
+    const groupCol = findCol(headers, ['grouping', 'folder', 'group']);
+    const favCol = findCol(headers, ['fav', 'favorite']);
+
+    if (passCol === -1) throw new Error('Cannot find password column. Expected: password');
+
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length < 2) continue;
+      const password = row[passCol] || '';
+      if (!password) continue;
+
+      const url = urlCol >= 0 ? (row[urlCol] || '') : '';
+      let title = nameCol >= 0 ? (row[nameCol] || '') : '';
+      if (!title && url) { try { title = new URL(url).hostname; } catch { title = url; } }
+      if (!title) title = 'Imported Login';
+
+      // Skip LastPass "secure note" placeholder URLs
+      const cleanUrl = (url === 'http://sn' || url === 'http://') ? '' : url;
+
+      const warnings = [];
+      if (cleanUrl && cleanUrl.startsWith('http://')) warnings.push('HTTP URL');
+
+      items.push({
+        source: 'lastpass',
+        title, url: cleanUrl,
+        username: userCol >= 0 ? (row[userCol] || '') : '',
+        password,
+        notes: noteCol >= 0 ? (row[noteCol] || '') : '',
+        folder: groupCol >= 0 ? (row[groupCol] || '') : '',
+        warnings, _selected: true, _index: items.length
+      });
+    }
+    return items;
+  }
+
+  // ===== Bitwarden CSV Parser =====
+  // Bitwarden exports: folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
+  function parseBitwardenCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    const rows = parseCsvRows(text);
+    if (rows.length < 2) throw new Error('CSV file is empty or has no data rows');
+
+    const headers = rows[0].map(h => h.toLowerCase().trim());
+    const nameCol = findCol(headers, ['name']);
+    const urlCol = findCol(headers, ['login_uri', 'url']);
+    const userCol = findCol(headers, ['login_username', 'username']);
+    const passCol = findCol(headers, ['login_password', 'password']);
+    const noteCol = findCol(headers, ['notes']);
+    const typeCol = findCol(headers, ['type']);
+    const folderCol = findCol(headers, ['folder']);
+
+    if (passCol === -1) throw new Error('Cannot find password column. Expected: login_password or password');
+
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length < 2) continue;
+      const password = row[passCol] || '';
+      // Bitwarden exports secure notes with no password — only import logins
+      const type = typeCol >= 0 ? (row[typeCol] || '').toLowerCase() : '';
+      if (type === 'note' || type === 'card' || type === 'identity') continue;
+      if (!password) continue;
+
+      const url = urlCol >= 0 ? (row[urlCol] || '') : '';
+      let title = nameCol >= 0 ? (row[nameCol] || '') : '';
+      if (!title && url) { try { title = new URL(url).hostname; } catch { title = url; } }
+      if (!title) title = 'Imported Login';
+
+      const warnings = [];
+      if (url && url.startsWith('http://')) warnings.push('HTTP URL');
+
+      items.push({
+        source: 'bitwarden',
+        title, url,
+        username: userCol >= 0 ? (row[userCol] || '') : '',
+        password,
+        notes: noteCol >= 0 ? (row[noteCol] || '') : '',
+        folder: folderCol >= 0 ? (row[folderCol] || '') : '',
+        warnings, _selected: true, _index: items.length
+      });
+    }
+    return items;
+  }
+
+  // ===== 1Password CSV Parser =====
+  // 1Password exports: Title,Url,Username,Password,Notes,Type (or similar)
+  function parse1PasswordCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    const rows = parseCsvRows(text);
+    if (rows.length < 2) throw new Error('CSV file is empty or has no data rows');
+
+    const headers = rows[0].map(h => h.toLowerCase().trim());
+    const titleCol = findCol(headers, ['title', 'name']);
+    const urlCol = findCol(headers, ['url', 'urls', 'website', 'login url']);
+    const userCol = findCol(headers, ['username', 'user', 'login']);
+    const passCol = findCol(headers, ['password', 'pass']);
+    const noteCol = findCol(headers, ['notes', 'notesplain', 'extra']);
+
+    if (passCol === -1) throw new Error('Cannot find password column. Expected: password');
+
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length < 2) continue;
+      const password = row[passCol] || '';
+      if (!password) continue;
+
+      const url = urlCol >= 0 ? (row[urlCol] || '') : '';
+      let title = titleCol >= 0 ? (row[titleCol] || '') : '';
+      if (!title && url) { try { title = new URL(url).hostname; } catch { title = url; } }
+      if (!title) title = 'Imported Login';
+
+      const warnings = [];
+      if (url && url.startsWith('http://')) warnings.push('HTTP URL');
+
+      items.push({
+        source: '1password',
+        title, url,
+        username: userCol >= 0 ? (row[userCol] || '') : '',
+        password,
+        notes: noteCol >= 0 ? (row[noteCol] || '') : '',
+        warnings, _selected: true, _index: items.length
+      });
+    }
+    return items;
+  }
+
+  // ===== KeePass CSV Parser =====
+  // KeePass exports: "Account","Login Name","Password","Web Site","Comments" (or Title,UserName,Password,URL,Notes)
+  function parseKeePassCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    const rows = parseCsvRows(text);
+    if (rows.length < 2) throw new Error('CSV file is empty or has no data rows');
+
+    const headers = rows[0].map(h => h.toLowerCase().trim());
+    const titleCol = findCol(headers, ['title', 'account', 'group']);
+    const urlCol = findCol(headers, ['url', 'web site', 'website']);
+    const userCol = findCol(headers, ['username', 'user name', 'login name', 'login']);
+    const passCol = findCol(headers, ['password']);
+    const noteCol = findCol(headers, ['notes', 'comments']);
+
+    if (passCol === -1) throw new Error('Cannot find password column. Expected: password');
+
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length < 2) continue;
+      const password = row[passCol] || '';
+      if (!password) continue;
+
+      const url = urlCol >= 0 ? (row[urlCol] || '') : '';
+      let title = titleCol >= 0 ? (row[titleCol] || '') : '';
+      if (!title && url) { try { title = new URL(url).hostname; } catch { title = url; } }
+      if (!title) title = 'Imported Login';
+
+      const warnings = [];
+      if (url && url.startsWith('http://')) warnings.push('HTTP URL');
+
+      items.push({
+        source: 'keepass',
+        title, url,
+        username: userCol >= 0 ? (row[userCol] || '') : '',
+        password,
+        notes: noteCol >= 0 ? (row[noteCol] || '') : '',
+        warnings, _selected: true, _index: items.length
+      });
+    }
+    return items;
+  }
 })();

@@ -93,6 +93,10 @@ async function handleMessage(msg, sender) {
       return { success: false, error: 'Click the AMPass extension icon to open.' };
     case 'OPEN_DESKTOP_UNLOCK':
       return await openDesktopUnlock(msg.payload || {});
+    case 'AUTOFILL_PAGE_LOAD':
+      return await autofillPageLoad(msg.payload);
+    case 'GET_AUTOFILL_SETTINGS':
+      return await getAutofillSettings();
     default:
       return { success: false, error: 'Unknown message type' };
   }
@@ -778,3 +782,109 @@ chrome.runtime.onMessage.addListener(() => {
 });
 
 // AMPass service worker ready
+
+// ===== Context Menu Setup =====
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'ampass-fill-login',
+    title: 'Fill login with AMPass',
+    contexts: ['editable', 'password']
+  });
+  chrome.contextMenus.create({
+    id: 'ampass-fill-identity',
+    title: 'Fill identity info with AMPass',
+    contexts: ['editable']
+  });
+  chrome.contextMenus.create({
+    id: 'ampass-generate-password',
+    title: 'Generate password',
+    contexts: ['editable', 'password']
+  });
+  chrome.contextMenus.create({
+    id: 'ampass-open',
+    title: 'Open AMPass',
+    contexts: ['all']
+  });
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab || !tab.id || !tab.url || !tab.url.startsWith('http')) return;
+
+  if (info.menuItemId === 'ampass-open') {
+    chrome.action.openPopup();
+    return;
+  }
+
+  if (!await Storage.isVaultUnlocked()) return;
+
+  if (info.menuItemId === 'ampass-fill-login') {
+    const result = await getMatches(tab.url);
+    if (result.success && result.count > 0) {
+      const match = result.items[0];
+      const vaultKeyHex = await Storage.getVaultKey();
+      const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+      if (encItem) {
+        const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'AUTOFILL',
+          payload: { username: decrypted.username || decrypted.email || '', password: decrypted.password || '' }
+        }).catch(() => {});
+      }
+    }
+  } else if (info.menuItemId === 'ampass-fill-identity') {
+    const idResult = await getIdentities();
+    if (idResult.success && idResult.items && idResult.items.length > 0) {
+      const match = idResult.items[0];
+      const vaultKeyHex = await Storage.getVaultKey();
+      const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+      if (encItem) {
+        const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'AUTOFILL_IDENTITY',
+          payload: decrypted
+        }).catch(() => {});
+      }
+    }
+  } else if (info.menuItemId === 'ampass-generate-password') {
+    const password = CryptoClient.generatePassword({ length: 20, uppercase: true, lowercase: true, numbers: true, symbols: true });
+    chrome.tabs.sendMessage(tab.id, {
+      type: 'AUTOFILL',
+      payload: { username: '', password: password }
+    }).catch(() => {});
+  }
+});
+
+// ===== Auto-fill on Page Load =====
+async function autofillPageLoad(payload) {
+  if (!payload || !payload.url) return { success: false };
+  if (!await Storage.isVaultUnlocked()) return { success: false, code: 'VAULT_LOCKED' };
+
+  // Check if auto-fill on load is enabled
+  const settings = await Storage.getSettings();
+  if (settings.autoFillOnLoad === false) return { success: false, code: 'DISABLED' };
+
+  const result = await getMatches(payload.url);
+  if (!result.success || result.count !== 1) return { success: false, code: 'NO_SINGLE_MATCH', count: result.count };
+
+  // Exactly 1 match — decrypt and return for auto-fill
+  const match = result.items[0];
+  const vaultKeyHex = await Storage.getVaultKey();
+  const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+  if (!encItem) return { success: false };
+
+  const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);
+  return {
+    success: true,
+    credentials: { username: decrypted.username || decrypted.email || '', password: decrypted.password || '' },
+    itemId: match.id
+  };
+}
+
+async function getAutofillSettings() {
+  const settings = await Storage.getSettings();
+  return {
+    success: true,
+    autoFillOnLoad: settings.autoFillOnLoad !== false, // default true
+    allowHttpAutofill: !!settings.allowHttpAutofill
+  };
+}

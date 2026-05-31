@@ -758,6 +758,329 @@
   // ===== Background sync =====
   setInterval(async () => { if (vaultKeyHex) { await invoke('record_activity'); await loadVault(); } }, 300000);
 
+  // ===== Import Data Module =====
+  (function setupImport() {
+    const importSource = document.getElementById('importSource');
+    const btnFile = document.getElementById('btnImportFile');
+    const fileName = document.getElementById('importFileName');
+    const previewArea = document.getElementById('importPreviewArea');
+    const previewCount = document.getElementById('importPreviewCount');
+    const previewBody = document.getElementById('importPreviewBody');
+    const checkAll = document.getElementById('importCheckAll');
+    const btnStart = document.getElementById('btnImportStart');
+    const btnCancel = document.getElementById('btnImportCancel');
+    const progressArea = document.getElementById('importProgressArea');
+    const progressBar = document.getElementById('importProgressBar');
+    const progressText = document.getElementById('importProgressText');
+    const resultArea = document.getElementById('importResultArea');
+    const resultContent = document.getElementById('importResultContent');
+    const btnSelectAll = document.getElementById('btnImportSelectAll');
+    const btnUnselectAll = document.getElementById('btnImportUnselectAll');
+
+    if (!importSource) return; // Page not loaded yet
+
+    let parsedItems = [];
+    let selectedSource = '';
+
+    importSource.addEventListener('change', () => {
+      selectedSource = importSource.value;
+      btnFile.disabled = !selectedSource;
+      fileName.textContent = '';
+      parsedItems = [];
+      previewArea.style.display = 'none';
+      resultArea.style.display = 'none';
+    });
+
+    btnFile.addEventListener('click', async () => {
+      if (!selectedSource) return;
+      const filters = selectedSource === 'sticky_password'
+        ? [{ name: 'Text files', extensions: ['txt'] }]
+        : [{ name: 'CSV files', extensions: ['csv'] }];
+
+      let filePath;
+      try {
+        const dialog = window.__TAURI__.dialog;
+        if (dialog && dialog.open) {
+          filePath = await dialog.open({ filters, multiple: false });
+        } else {
+          // Fallback for Tauri v2
+          filePath = await invoke('pick_file', { filters: selectedSource === 'sticky_password' ? 'txt' : 'csv' });
+        }
+      } catch (e) {
+        // Try Tauri v2 plugin import
+        try {
+          const { open } = await import('@tauri-apps/plugin-dialog');
+          filePath = await open({ filters, multiple: false });
+        } catch {
+          toast('File picker not available');
+          return;
+        }
+      }
+
+      if (!filePath) return;
+      const name = typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() : filePath.name || 'file';
+      fileName.textContent = name;
+
+      // Read file contents
+      let text;
+      try {
+        const fs = window.__TAURI__.fs;
+        if (fs && fs.readTextFile) {
+          text = await fs.readTextFile(filePath);
+        } else {
+          text = await invoke('read_text_file', { path: filePath });
+        }
+      } catch (e) {
+        try {
+          const { readTextFile } = await import('@tauri-apps/plugin-fs');
+          text = await readTextFile(filePath);
+        } catch {
+          toast('Could not read file: ' + (e.message || e));
+          return;
+        }
+      }
+
+      // Parse
+      try {
+        if (selectedSource === 'sticky_password') {
+          parsedItems = parseStickyPasswordTxt(text);
+        } else if (selectedSource === 'lastpass') {
+          parsedItems = parsePasswordCsv(text, ['url', 'username', 'password', 'totp', 'extra', 'name', 'grouping']);
+        } else if (selectedSource === 'bitwarden') {
+          parsedItems = parsePasswordCsv(text, ['name', 'login_uri', 'login_username', 'login_password', 'notes', 'type', 'folder']);
+        } else if (selectedSource === '1password') {
+          parsedItems = parsePasswordCsv(text, ['title', 'url', 'username', 'password', 'notes']);
+        } else {
+          parsedItems = parsePasswordCsv(text, ['name', 'url', 'username', 'password']);
+        }
+        renderPreview();
+      } catch (e) {
+        toast('Parse error: ' + e.message);
+      }
+    });
+
+    function renderPreview() {
+      previewCount.textContent = parsedItems.length;
+      previewBody.innerHTML = parsedItems.map((it, i) => `<tr>
+        <td><input type="checkbox" class="import-check" data-idx="${i}" ${it._selected ? 'checked' : ''}></td>
+        <td>${esc(it.title)}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(it.url)}">${esc(it.url)}</td>
+        <td>${esc(it.username)}</td>
+        <td>••••••</td>
+      </tr>`).join('');
+      previewArea.style.display = 'block';
+      btnStart.disabled = parsedItems.filter(i => i._selected).length === 0;
+    }
+
+    previewBody.addEventListener('change', (e) => {
+      if (e.target.classList.contains('import-check')) {
+        const idx = parseInt(e.target.dataset.idx);
+        if (parsedItems[idx]) parsedItems[idx]._selected = e.target.checked;
+        btnStart.disabled = parsedItems.filter(i => i._selected).length === 0;
+      }
+    });
+
+    checkAll.addEventListener('change', () => {
+      parsedItems.forEach(i => i._selected = checkAll.checked);
+      previewBody.querySelectorAll('.import-check').forEach(cb => cb.checked = checkAll.checked);
+      btnStart.disabled = !checkAll.checked;
+    });
+
+    btnSelectAll.addEventListener('click', () => { checkAll.checked = true; checkAll.dispatchEvent(new Event('change')); });
+    btnUnselectAll.addEventListener('click', () => { checkAll.checked = false; checkAll.dispatchEvent(new Event('change')); });
+
+    btnCancel.addEventListener('click', () => {
+      parsedItems = [];
+      previewArea.style.display = 'none';
+      fileName.textContent = '';
+    });
+
+    btnStart.addEventListener('click', async () => {
+      const selected = parsedItems.filter(i => i._selected);
+      if (selected.length === 0) return;
+      if (!vaultKeyHex) { toast('Vault is locked'); return; }
+
+      btnStart.disabled = true;
+      progressArea.style.display = 'block';
+      resultArea.style.display = 'none';
+
+      const BATCH = 50;
+      let imported = 0, failed = 0, skipped = 0;
+
+      for (let i = 0; i < selected.length; i += BATCH) {
+        const batch = selected.slice(i, i + BATCH);
+        const encBatch = [];
+
+        for (const item of batch) {
+          try {
+            const plainData = { title: item.title, url: item.url, username: item.username, password: item.password, notes: item.notes || '' };
+            const enc = await DesktopCrypto.encryptItem(JSON.stringify(plainData), vaultKeyHex);
+            const titleHash = searchKey ? await DesktopCrypto.hmacHash(item.title || '', searchKey) : null;
+            const urlHash = (searchKey && item.url) ? await DesktopCrypto.hmacHash(extractDomain(item.url), searchKey) : null;
+            const strength = estimateStrength(item.password);
+
+            encBatch.push({
+              encrypted_data: enc.ciphertext,
+              encryption_iv: enc.iv,
+              item_type: 'login',
+              title_hash: titleHash,
+              url_hash: urlHash,
+              password_strength: strength,
+              is_weak: strength < 40 ? 1 : 0
+            });
+          } catch (e) {
+            failed++;
+          }
+        }
+
+        if (encBatch.length > 0) {
+          try {
+            const res = await Api.post('/api/vault/import-bulk', { items: encBatch, source: selectedSource });
+            if (res.imported) imported += res.imported;
+            if (res.skipped) skipped += res.skipped;
+            if (res.failed) failed += res.failed;
+          } catch (e) {
+            failed += encBatch.length;
+          }
+        }
+
+        const pct = Math.round(((i + batch.length) / selected.length) * 100);
+        progressBar.style.width = pct + '%';
+        progressText.textContent = `Importing... ${Math.min(i + batch.length, selected.length)}/${selected.length}`;
+      }
+
+      progressArea.style.display = 'none';
+      resultArea.style.display = 'block';
+      resultContent.innerHTML = `
+        <div style="text-align:center;">
+          <div style="font-size:1.8rem;margin-bottom:6px;">${imported > 0 ? '✅' : '❌'}</div>
+          <h3 style="margin:0 0 8px;">Import Complete</h3>
+          <div style="display:flex;gap:16px;justify-content:center;font-size:0.85rem;">
+            <div><strong style="color:#22c55e;">${imported}</strong> Imported</div>
+            <div><strong style="color:#eab308;">${skipped}</strong> Skipped</div>
+            <div><strong style="color:#ef4444;">${failed}</strong> Failed</div>
+          </div>
+        </div>
+      `;
+
+      if (imported > 0) {
+        await loadVault(); // Refresh vault items
+        toast(`Imported ${imported} items`);
+      }
+    });
+
+    // ===== Parsers =====
+    function parseStickyPasswordTxt(text) {
+      if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+      const lines = text.split(/\r?\n/);
+      const items = [];
+      let currentGroup = '';
+      let currentEntry = null;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('---')) { if (currentEntry && currentEntry.password) items.push(currentEntry); currentEntry = null; continue; }
+        if (!line.startsWith(' ') && !line.startsWith('\t') && !trimmed.includes(':')) {
+          if (currentEntry && currentEntry.password) items.push(currentEntry);
+          currentEntry = null;
+          currentGroup = trimmed;
+          continue;
+        }
+        const colonIdx = trimmed.indexOf(':');
+        if (colonIdx === -1) continue;
+        const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
+        const val = trimmed.substring(colonIdx + 1).trim();
+
+        if (['name', 'title', 'description'].includes(key)) {
+          currentEntry = currentEntry || { title: '', url: '', username: '', password: '', notes: '', _selected: true, _index: items.length };
+          currentEntry.title = val;
+        } else if (['web', 'url', 'website', 'link'].includes(key)) {
+          currentEntry = currentEntry || { title: '', url: '', username: '', password: '', notes: '', _selected: true, _index: items.length };
+          currentEntry.url = val;
+          if (!currentEntry.title && val) { try { currentEntry.title = new URL(val).hostname; } catch { currentEntry.title = val; } }
+        } else if (['login', 'user', 'username', 'user name', 'email'].includes(key)) {
+          currentEntry = currentEntry || { title: '', url: '', username: '', password: '', notes: '', _selected: true, _index: items.length };
+          currentEntry.username = val;
+        } else if (['password', 'pass'].includes(key)) {
+          currentEntry = currentEntry || { title: '', url: '', username: '', password: '', notes: '', _selected: true, _index: items.length };
+          currentEntry.password = val;
+        } else if (['comment', 'note', 'notes'].includes(key)) {
+          if (currentEntry) currentEntry.notes = val;
+        }
+      }
+      if (currentEntry && currentEntry.password) items.push(currentEntry);
+      return items;
+    }
+
+    function parsePasswordCsv(text, expectedCols) {
+      if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+      const rows = parseCsvRows(text);
+      if (rows.length < 2) return [];
+
+      const headers = rows[0].map(h => h.toLowerCase().trim());
+      const find = (names) => { for (const n of names) { const idx = headers.indexOf(n); if (idx >= 0) return idx; } return -1; };
+      const titleCol = find(['title', 'name', 'account']);
+      const urlCol = find(['url', 'login_uri', 'web site', 'website', 'urls']);
+      const userCol = find(['username', 'login_username', 'user', 'login name', 'login']);
+      const passCol = find(['password', 'login_password', 'pass']);
+      const noteCol = find(['notes', 'extra', 'comments', 'notesplain']);
+
+      if (passCol === -1) throw new Error('Cannot find password column');
+
+      const items = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (r.length < 2) continue;
+        const password = r[passCol] || '';
+        if (!password) continue;
+        const url = urlCol >= 0 ? (r[urlCol] || '') : '';
+        let title = titleCol >= 0 ? (r[titleCol] || '') : '';
+        if (!title && url) { try { title = new URL(url).hostname; } catch { title = url; } }
+        if (!title) title = 'Imported Login';
+        // Skip LastPass secure note placeholder
+        const cleanUrl = (url === 'http://sn' || url === 'http://') ? '' : url;
+        items.push({ title, url: cleanUrl, username: userCol >= 0 ? (r[userCol] || '') : '', password, notes: noteCol >= 0 ? (r[noteCol] || '') : '', _selected: true, _index: items.length });
+      }
+      return items;
+    }
+
+    function parseCsvRows(text) {
+      const rows = []; let row = []; let cell = ''; let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else { inQuotes = false; } }
+          else { cell += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; }
+          else if (ch === ',') { row.push(cell); cell = ''; }
+          else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) { row.push(cell); cell = ''; rows.push(row); row = []; if (ch === '\r') i++; }
+          else if (ch === '\r') { row.push(cell); cell = ''; rows.push(row); row = []; }
+          else { cell += ch; }
+        }
+      }
+      if (cell || row.length) { row.push(cell); rows.push(row); }
+      return rows;
+    }
+
+    function extractDomain(url) {
+      try { return new URL(url).hostname; } catch { return ''; }
+    }
+
+    function estimateStrength(pw) {
+      if (!pw) return 0;
+      let score = 0;
+      if (pw.length >= 8) score += 20;
+      if (pw.length >= 12) score += 15;
+      if (pw.length >= 16) score += 10;
+      if (/[A-Z]/.test(pw)) score += 15;
+      if (/[a-z]/.test(pw)) score += 10;
+      if (/[0-9]/.test(pw)) score += 15;
+      if (/[^A-Za-z0-9]/.test(pw)) score += 15;
+      return Math.min(100, score);
+    }
+  })();
+
   // ===== Start =====
   init();
   setTimeout(genPw, 200);

@@ -97,9 +97,12 @@
     const data = captureSubmission(form);
     if (!data) return; // No password field or empty
 
-    // Don't capture if it was autofilled by us
+    // Don't capture if it was autofilled by us (avoid re-saving what we just filled)
     const pwField = form.querySelector('input[type="password"][data-ampass-filled]');
     if (pwField) return;
+    // Also check if any field in the form was auto-filled by page-load fill
+    const anyFilled = form.querySelector('[data-ampass-filled]');
+    if (anyFilled) return;
 
     // Store for the service worker (survives page navigation as fallback)
     lastSubmittedData = data;

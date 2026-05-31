@@ -317,7 +317,7 @@ class VaultApiController {
 
         $items = $input['items'];
         $source = $input['source'] ?? 'unknown';
-        $allowedSources = ['sticky_password', 'chrome', 'edge', 'brave', 'firefox', 'generic_csv', 'unknown'];
+        $allowedSources = ['sticky_password', 'chrome', 'edge', 'brave', 'firefox', 'generic_csv', 'lastpass', 'bitwarden', '1password', 'keepass', 'unknown'];
         if (!in_array($source, $allowedSources, true)) $source = 'unknown';
 
         // Limit batch size
@@ -345,76 +345,86 @@ class VaultApiController {
         $failed = 0;
         $failedErrors = [];
 
-        Database::beginTransaction();
-        try {
-            foreach ($items as $item) {
-                if (empty($item['encrypted_data']) || empty($item['encryption_iv'])) {
-                    $skipped++;
-                    continue;
+        // Process items in smaller batches with independent transactions.
+        // This ensures that a single bad item doesn't roll back ALL successfully imported items.
+        $batchSize = 50;
+        $totalItems = count($items);
+
+        for ($batchStart = 0; $batchStart < $totalItems; $batchStart += $batchSize) {
+            $batch = array_slice($items, $batchStart, $batchSize);
+
+            Database::beginTransaction();
+            $batchOk = true;
+
+            try {
+                foreach ($batch as $item) {
+                    if (empty($item['encrypted_data']) || empty($item['encryption_iv'])) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $itemType = $item['item_type'] ?? 'login';
+                    if (!in_array($itemType, $allowedTypes, true)) $itemType = 'login';
+
+                    try {
+                        VaultItem::create([
+                            'user_id' => $this->userId,
+                            'item_type' => $itemType,
+                            'encrypted_data' => $item['encrypted_data'],
+                            'encryption_iv' => $item['encryption_iv'],
+                            'title_hash' => $item['title_hash'] ?? null,
+                            'url_hash' => $item['url_hash'] ?? null,
+                            'host_hash' => $item['host_hash'] ?? null,
+                            'folder_id' => !empty($item['folder_id']) ? (int)$item['folder_id'] : null,
+                            'is_favorite' => 0,
+                            'password_strength' => $item['password_strength'] ?? null,
+                            'is_weak' => (int)($item['is_weak'] ?? 0),
+                            'is_reused' => 0
+                        ]);
+                        $imported++;
+                    } catch (\Exception $e) {
+                        $failed++;
+                        $errMsg = $e->getMessage();
+                        // Truncate long error messages
+                        if (strlen($errMsg) > 200) $errMsg = substr($errMsg, 0, 200) . '...';
+                        $failedErrors[] = $errMsg;
+                    }
                 }
 
-                $itemType = $item['item_type'] ?? 'login';
-                if (!in_array($itemType, $allowedTypes, true)) $itemType = 'login';
-
-                try {
-                    VaultItem::create([
-                        'user_id' => $this->userId,
-                        'item_type' => $itemType,
-                        'encrypted_data' => $item['encrypted_data'],
-                        'encryption_iv' => $item['encryption_iv'],
-                        'title_hash' => $item['title_hash'] ?? null,
-                        'url_hash' => $item['url_hash'] ?? null,
-                        'host_hash' => $item['host_hash'] ?? null,
-                        'folder_id' => !empty($item['folder_id']) ? (int)$item['folder_id'] : null,
-                        'is_favorite' => 0,
-                        'password_strength' => $item['password_strength'] ?? null,
-                        'is_weak' => (int)($item['is_weak'] ?? 0),
-                        'is_reused' => 0
-                    ]);
-                    $imported++;
-                } catch (\Exception $e) {
-                    $failed++;
-                    $failedErrors[] = $e->getMessage();
-                }
+                Database::commit();
+            } catch (\Exception $e) {
+                // Batch-level failure — try to rollback gracefully
+                try { Database::rollback(); } catch (\Exception $rbEx) {}
+                $batchFailed = count($batch);
+                $failed += $batchFailed;
+                $failedErrors[] = 'Batch error (items ' . ($batchStart + 1) . '-' . ($batchStart + count($batch)) . '): ' . $e->getMessage();
             }
-
-            Database::commit();
-
-            // Update import history
-            if ($importId !== null) {
-                try {
-                    Database::execute(
-                        "UPDATE import_history SET status = 'completed', item_count_imported = ?, item_count_skipped = ?, item_count_failed = ?, completed_at = NOW() WHERE id = ?",
-                        [$imported, $skipped, $failed, $importId]
-                    );
-                } catch (\Exception $e) {
-                    error_log("AMPass import history update failed: " . $e->getMessage());
-                }
-            }
-
-            AuditLog::log('bulk_import_completed', $this->userId, null, null, [
-                'source' => $source, 'imported' => $imported, 'skipped' => $skipped, 'failed' => $failed
-            ]);
-
-            echo json_encode([
-                'success' => true,
-                'import_id' => $importId,
-                'imported' => $imported,
-                'skipped' => $skipped,
-                'failed' => $failed,
-                'total' => count($items),
-                'errors' => array_slice(array_unique($failedErrors), 0, 5)
-            ]);
-
-        } catch (\Exception $e) {
-            Database::rollback();
-            if ($importId !== null) {
-                try {
-                    Database::execute("UPDATE import_history SET status = 'failed' WHERE id = ?", [$importId]);
-                } catch (\Exception $ex) {}
-            }
-            http_response_code(500);
-            echo json_encode(['error' => 'Bulk import failed: ' . $e->getMessage(), 'imported' => $imported]);
         }
+
+        // Update import history
+        if ($importId !== null) {
+            try {
+                Database::execute(
+                    "UPDATE import_history SET status = 'completed', item_count_imported = ?, item_count_skipped = ?, item_count_failed = ?, completed_at = NOW() WHERE id = ?",
+                    [$imported, $skipped, $failed, $importId]
+                );
+            } catch (\Exception $e) {
+                error_log("AMPass import history update failed: " . $e->getMessage());
+            }
+        }
+
+        AuditLog::log('bulk_import_completed', $this->userId, null, null, [
+            'source' => $source, 'imported' => $imported, 'skipped' => $skipped, 'failed' => $failed
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'import_id' => $importId,
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'failed' => $failed,
+            'total' => count($items),
+            'errors' => array_slice(array_unique($failedErrors), 0, 5)
+        ]);
     }
 }

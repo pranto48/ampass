@@ -30,6 +30,10 @@ $history = $data['history'] ?? [];
                 <select id="importSource" class="form-select">
                     <option value="">Choose source...</option>
                     <option value="sticky_password">Sticky Password (TXT export)</option>
+                    <option value="lastpass">LastPass (CSV)</option>
+                    <option value="bitwarden">Bitwarden (CSV)</option>
+                    <option value="1password">1Password (CSV)</option>
+                    <option value="keepass">KeePass (CSV)</option>
                     <option value="chrome">Google Chrome (CSV)</option>
                     <option value="edge">Microsoft Edge (CSV)</option>
                     <option value="brave">Brave Browser (CSV)</option>
@@ -128,9 +132,30 @@ $history = $data['history'] ?? [];
 </div>
 
 <script>
-window.AMPass = { baseUrl: '<?= APP_URL ?>', csrfToken: '<?= $csrfToken ?>' };
+window.AMPass = {
+    baseUrl: '<?= APP_URL ?>',
+    csrfToken: '<?= $csrfToken ?>',
+    vaultUnlocked: <?= Session::isVaultUnlocked() ? 'true' : 'false' ?>
+};
 </script>
 <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
+<script>
+// CRITICAL: Restore vault key from sessionStorage before import.js loads.
+// Without this, AMPassCrypto.isUnlocked() returns false and all encryptions fail.
+(async function() {
+    if (window.AMPass.vaultUnlocked && typeof AMPassCrypto !== 'undefined') {
+        const restored = await AMPassCrypto.restoreVaultKey();
+        if (!restored) {
+            const warn = document.createElement('div');
+            warn.className = 'alert alert-error';
+            warn.style.marginBottom = '16px';
+            warn.innerHTML = '&#9888; <strong>Vault key not available.</strong> Please <a href="' + window.AMPass.baseUrl + '/vault" style="color:#fca5a5;text-decoration:underline;">go to Vault</a> and unlock first, then return here to import.';
+            const formPage = document.querySelector('.form-page');
+            if (formPage) formPage.insertBefore(warn, formPage.children[1]);
+        }
+    }
+})();
+</script>
 <script src="<?= APP_URL ?>/public/js/import.js"></script>
 </body>
 </html>

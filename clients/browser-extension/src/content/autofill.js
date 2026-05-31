@@ -188,6 +188,7 @@
   /**
    * Fill a field and trigger proper events so websites detect the change.
    * SECURITY: Never fills hidden inputs, csrf_token fields, or AMPass-internal fields.
+   * Handles React, Vue, Angular, and vanilla JS forms with proper event dispatch.
    */
   function fillField(field, value) {
     // Never fill hidden fields or CSRF tokens
@@ -197,16 +198,50 @@
 
     // Focus the field
     field.focus();
+    field.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
+    field.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
 
     if (field.tagName === 'SELECT') {
       const options = Array.from(field.options);
       const valLower = String(value).toLowerCase().trim();
       
+      // Exact match by value or text
       let matchedOption = options.find(opt => 
         opt.value.toLowerCase().trim() === valLower || 
         opt.text.toLowerCase().trim() === valLower
       );
       
+      // Country code normalization (e.g., "US" matches "United States")
+      if (!matchedOption) {
+        const countryMap = {
+          'us': 'united states', 'usa': 'united states', 'uk': 'united kingdom', 'gb': 'united kingdom',
+          'ca': 'canada', 'au': 'australia', 'de': 'germany', 'fr': 'france', 'jp': 'japan',
+          'cn': 'china', 'in': 'india', 'br': 'brazil', 'mx': 'mexico', 'es': 'spain',
+          'it': 'italy', 'nl': 'netherlands', 'se': 'sweden', 'no': 'norway', 'dk': 'denmark',
+          'fi': 'finland', 'pl': 'poland', 'pt': 'portugal', 'at': 'austria', 'ch': 'switzerland',
+          'be': 'belgium', 'ie': 'ireland', 'nz': 'new zealand', 'sg': 'singapore',
+          'kr': 'south korea', 'za': 'south africa', 'ae': 'united arab emirates',
+          'bd': 'bangladesh', 'pk': 'pakistan', 'ph': 'philippines', 'th': 'thailand',
+          'my': 'malaysia', 'id': 'indonesia', 'vn': 'vietnam', 'tw': 'taiwan',
+          'ru': 'russia', 'ua': 'ukraine', 'tr': 'turkey', 'il': 'israel', 'eg': 'egypt',
+          'ar': 'argentina', 'cl': 'chile', 'co': 'colombia', 'pe': 'peru'
+        };
+        const mapped = countryMap[valLower];
+        if (mapped) {
+          matchedOption = options.find(opt => opt.text.toLowerCase().trim() === mapped);
+        }
+        // Also try reverse lookup (country name → code)
+        if (!matchedOption) {
+          for (const [code, name] of Object.entries(countryMap)) {
+            if (name === valLower) {
+              matchedOption = options.find(opt => opt.value.toLowerCase().trim() === code);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Partial match
       if (!matchedOption) {
         matchedOption = options.find(opt => 
           opt.text.toLowerCase().includes(valLower) || 
@@ -221,6 +256,7 @@
       }
       
       field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       field.dispatchEvent(new Event('blur', { bubbles: true }));
       return;
     }
@@ -229,13 +265,46 @@
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype, 'value'
     ).set;
+
+    // Simulate typing: compositionstart -> input -> compositionend
+    // This pattern is required by some React/Angular forms that track composition events
+    field.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    
     nativeInputValueSetter.call(field, value);
 
-    // Dispatch events in the correct order
-    field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    // Dispatch events in the correct order for framework compatibility
+    // InputEvent is needed for React 17+ which listens to the native input event
+    field.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: value }));
+    field.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: value }));
     field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-    field.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
-    field.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+    
+    // KeyboardEvent dispatch for forms that validate via keydown/keyup
+    field.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Unidentified' }));
+    field.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Unidentified' }));
+    
     field.dispatchEvent(new Event('blur', { bubbles: true }));
   }
+
+  /**
+   * Fill username and password with a small delay between them.
+   * React/Vue state updates are async — filling both simultaneously can cause race conditions.
+   */
+  function fillFieldsSequentially(usernameField, username, passwordField, password) {
+    return new Promise(resolve => {
+      if (usernameField && username) {
+        fillField(usernameField, username);
+      }
+      // Small delay between fields to avoid React state race conditions
+      setTimeout(() => {
+        if (passwordField && password) {
+          fillField(passwordField, password);
+          passwordField.setAttribute('data-ampass-filled', 'true');
+        }
+        resolve(true);
+      }, 50);
+    });
+  }
+
+  // Expose sequential filler for form-detector
+  window.__ampassFillSequential = fillFieldsSequentially;
 })();

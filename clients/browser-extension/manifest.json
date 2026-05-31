@@ -11,7 +11,8 @@
         "scripting",
         "clipboardWrite",
         "alarms",
-        "nativeMessaging"
+        "nativeMessaging",
+        "contextMenus"
     ],
     "optional_permissions": [],
     "host_permissions": [],

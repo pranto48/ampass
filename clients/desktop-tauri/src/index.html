@@ -82,6 +82,7 @@
           <a href="#" class="nav-link" data-page="sharing"><span class="nav-icon">🤝</span>Sharing Center</a>
           <a href="#" class="nav-link" data-page="security"><span class="nav-icon">🛡️</span>Security Dashboard</a>
           <a href="#" class="nav-link" data-page="generator"><span class="nav-icon">🔑</span>Password Generator</a>
+          <a href="#" class="nav-link" data-page="importData"><span class="nav-icon">📥</span>Import Data</a>
           <div class="nav-divider"></div>
           <a href="#" class="nav-link" data-page="settings"><span class="nav-icon">⚙️</span>Settings</a>
         </nav>
@@ -242,6 +243,72 @@
             <div class="page-header"><h1>Bookmarks</h1></div>
             <p style="font-size:12px;color:#64748b;padding:0 20px 8px;">Favorited web accounts appear here as quick-access bookmarks.</p>
             <div id="bookmarksList" class="item-table"><p class="empty-hint">No bookmarks yet.</p></div>
+          </div>
+
+          <!-- Import Data -->
+          <div id="pageImportData" class="page">
+            <div class="page-header"><h1>Import Data</h1></div>
+            <div class="import-panel" style="padding:0 20px;">
+              <div class="alert-warning" style="background:#332b00;border:1px solid #665500;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;color:#fcd34d;">
+                ⚠️ <strong>Security:</strong> Exported password files contain plaintext passwords. Import only on a trusted computer. Delete the file after importing.
+              </div>
+
+              <div style="margin-bottom:12px;">
+                <label class="field-label">Import Source</label>
+                <select id="importSource" class="field-input" style="padding:8px 12px;">
+                  <option value="">Choose source...</option>
+                  <option value="sticky_password">Sticky Password (TXT)</option>
+                  <option value="lastpass">LastPass (CSV)</option>
+                  <option value="bitwarden">Bitwarden (CSV)</option>
+                  <option value="1password">1Password (CSV)</option>
+                  <option value="keepass">KeePass (CSV)</option>
+                  <option value="chrome">Google Chrome (CSV)</option>
+                  <option value="edge">Microsoft Edge (CSV)</option>
+                  <option value="brave">Brave (CSV)</option>
+                  <option value="firefox">Firefox (CSV)</option>
+                  <option value="generic_csv">Generic CSV</option>
+                </select>
+              </div>
+
+              <div style="margin-bottom:12px;">
+                <button id="btnImportFile" class="btn-ghost" disabled>📁 Select File...</button>
+                <span id="importFileName" style="margin-left:8px;font-size:0.8rem;color:#94a3b8;"></span>
+              </div>
+
+              <!-- Preview Table -->
+              <div id="importPreviewArea" style="display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <h3 style="margin:0;">Preview (<span id="importPreviewCount">0</span> items)</h3>
+                  <div style="display:flex;gap:6px;">
+                    <button id="btnImportSelectAll" class="btn-ghost-sm">Select All</button>
+                    <button id="btnImportUnselectAll" class="btn-ghost-sm">Unselect All</button>
+                  </div>
+                </div>
+                <div style="max-height:300px;overflow-y:auto;border:1px solid #27272a;border-radius:8px;">
+                  <table class="data-table" style="width:100%;font-size:0.78rem;">
+                    <thead><tr><th style="width:28px;"><input type="checkbox" id="importCheckAll" checked></th><th>Title</th><th>URL</th><th>Username</th><th>Password</th></tr></thead>
+                    <tbody id="importPreviewBody"></tbody>
+                  </table>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px;">
+                  <button id="btnImportStart" class="btn-primary" disabled>Import Selected</button>
+                  <button id="btnImportCancel" class="btn-ghost-sm">Cancel</button>
+                </div>
+              </div>
+
+              <!-- Progress -->
+              <div id="importProgressArea" style="display:none;margin-top:12px;">
+                <div style="background:#27272a;border-radius:6px;height:8px;overflow:hidden;">
+                  <div id="importProgressBar" style="background:#6366f1;height:100%;width:0%;transition:width 0.3s;"></div>
+                </div>
+                <p id="importProgressText" style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Importing...</p>
+              </div>
+
+              <!-- Result -->
+              <div id="importResultArea" style="display:none;margin-top:12px;">
+                <div id="importResultContent" style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:14px;"></div>
+              </div>
+            </div>
           </div>
         </div>
 

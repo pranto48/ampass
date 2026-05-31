@@ -225,6 +225,10 @@
         type: 'GET_MATCHES',
         payload: { url: window.location.href }
       }).catch(() => {});
+
+      // Auto-fill on page load: if there's exactly 1 match, fill automatically
+      // This gives a LastPass-like experience where logins are pre-filled
+      tryAutoFillOnLoad(loginForms[0]);
     }
   }
 
@@ -327,6 +331,26 @@
     });
 
     document.body.appendChild(icon);
+
+    // Focus-triggered dropdown: show credential dropdown when the field gets focus
+    // This mimics LastPass/StickyPassword inline popup behavior
+    field.addEventListener('focus', () => {
+      // Only trigger if we haven't already auto-filled and there's no dropdown showing
+      if (field.getAttribute('data-ampass-filled') === 'true') return;
+      if (document.getElementById('ampass-credential-dropdown')) return;
+
+      // Small delay to avoid interfering with click-to-fill
+      clearTimeout(field.__ampassFocusTimer);
+      field.__ampassFocusTimer = setTimeout(() => {
+        if (document.activeElement === field && !document.getElementById('ampass-credential-dropdown')) {
+          handleFieldIconClick(icon, formData);
+        }
+      }, 400);
+    });
+
+    field.addEventListener('blur', () => {
+      clearTimeout(field.__ampassFocusTimer);
+    });
 
     // Position the icon at the right edge of the field
     function positionIcon() {
@@ -830,6 +854,48 @@
   window.__ampassGetForms = function() {
     return detectedForms;
   };
+
+  /**
+   * Auto-fill on page load (like LastPass).
+   * If exactly 1 match exists for this page, fill it automatically.
+   * Gated by user setting (default: enabled).
+   */
+  function tryAutoFillOnLoad(formData) {
+    // Don't auto-fill if already filled
+    if (formData.passwordField && formData.passwordField.getAttribute('data-ampass-filled') === 'true') return;
+    // Don't auto-fill if the password field already has a value (browser autofill)
+    if (formData.passwordField && formData.passwordField.value) return;
+
+    chrome.runtime.sendMessage({
+      type: 'AUTOFILL_PAGE_LOAD',
+      payload: { url: window.location.href }
+    }).then(response => {
+      if (!response || !response.success || !response.credentials) return;
+
+      const { username, password } = response.credentials;
+      if (!password) return;
+
+      // Use the global autofill function
+      if (window.__ampassAutofill) {
+        const filled = window.__ampassAutofill({ username, password }, formData);
+        if (filled) {
+          // Mark as auto-filled to prevent save-detector from re-capturing
+          if (formData.passwordField) formData.passwordField.setAttribute('data-ampass-filled', 'true');
+          if (formData.usernameField) formData.usernameField.setAttribute('data-ampass-filled', 'true');
+
+          showAmpassToast('Auto-filled by AMPass', 'success');
+
+          // Log usage
+          if (response.itemId) {
+            chrome.runtime.sendMessage({
+              type: 'LOG_USAGE',
+              payload: { item_id: response.itemId, action: 'autofilled_pageload', client_type: 'extension' }
+            }).catch(() => {});
+          }
+        }
+      }
+    }).catch(() => {});
+  }
 
   // ===== Run Detection =====
   // Initial detection
