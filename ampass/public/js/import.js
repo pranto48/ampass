@@ -16,9 +16,9 @@
     if (vaultKeyReady) return true;
     if (typeof AMPassCrypto === 'undefined') return false;
     if (AMPassCrypto.isUnlocked()) { vaultKeyReady = true; return true; }
-    // Try restoring from sessionStorage
+    // Try restoring from sessionStorage or showing inline unlock modal
     try {
-      const restored = await AMPassCrypto.restoreVaultKey();
+      const restored = await AMPassCrypto.ensureVaultKeyUnlocked();
       vaultKeyReady = restored;
       return restored;
     } catch (e) {
@@ -368,7 +368,6 @@
     // Verify vault is unlocked
     const keyReady = await ensureVaultKey();
     if (!keyReady) {
-      alert('Import failed: Vault is locked or decryption key is not available.\n\nPlease go to your Vault page, unlock it, then come back here to import.');
       els.btnImport.disabled = false;
       return;
     }
@@ -424,12 +423,13 @@
 
         // Send batch to server
         if (encryptedBatch.length > 0) {
-          const resp = await fetch(window.AMPass.baseUrl + '/api/vault/import-bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.AMPass.csrfToken },
-            body: JSON.stringify({ items: encryptedBatch, source: selectedSource })
-          });
-          const result = await resp.json();
+          let result;
+          try {
+            result = await AMPassAPI.post('/api/vault/import-bulk', { items: encryptedBatch, source: selectedSource });
+          } catch (err) {
+            result = { success: false, error: err.message };
+          }
+
           if (result.success) {
             totalImported += result.imported || 0;
             totalSkipped += result.skipped || 0;

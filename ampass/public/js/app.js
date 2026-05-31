@@ -317,8 +317,22 @@
                 config.body = JSON.stringify(options.body);
             }
 
-            const response = await fetch(url, config);
-            const data = await response.json();
+            let response = await fetch(url, config);
+            let data = await response.json();
+
+            if (response.status === 403 && data && data.error === 'Vault is locked') {
+                if (typeof AMPassCrypto !== 'undefined') {
+                    const unlocked = await AMPassCrypto.ensureVaultKeyUnlocked();
+                    if (unlocked) {
+                        // Update CSRF token from window if it was refreshed during unlock
+                        if (window.AMPass && window.AMPass.csrfToken) {
+                            config.headers['X-CSRF-TOKEN'] = window.AMPass.csrfToken;
+                        }
+                        response = await fetch(url, config);
+                        data = await response.json();
+                    }
+                }
+            }
 
             if (!response.ok) {
                 throw new Error(data.error || 'Request failed');
@@ -347,15 +361,19 @@
         LockTimer.init();
 
         // Restore vault key from session if available
-        if (typeof AMPassCrypto !== 'undefined' && window.AMPass && window.AMPass.vaultUnlocked) {
-            AMPassCrypto.restoreVaultKey().then(restored => {
-                if (restored) {
-                    // Decrypt visible vault items
-                    decryptVisibleItems();
-                } else {
-                    handleLockedVault();
-                }
-            });
+        if (typeof AMPassCrypto !== 'undefined' && window.AMPass) {
+            if (window.AMPass.vaultUnlocked) {
+                AMPassCrypto.restoreVaultKey().then(restored => {
+                    if (restored) {
+                        // Decrypt visible vault items
+                        decryptVisibleItems();
+                    } else {
+                        handleLockedVault();
+                    }
+                });
+            } else {
+                handleLockedVault();
+            }
         }
     });
 

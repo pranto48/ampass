@@ -19,6 +19,7 @@ const AMPassCrypto = (function() {
 
     // Storage key for the derived vault key (session only - stored in memory)
     let _vaultKey = null;
+    let activeUnlockPromise = null;
 
     /**
      * Generate a random salt
@@ -438,7 +439,11 @@ const AMPassCrypto = (function() {
         const restored = await restoreVaultKey();
         if (restored) return true;
 
-        return new Promise((resolve) => {
+        if (activeUnlockPromise) {
+            return activeUnlockPromise;
+        }
+
+        activeUnlockPromise = new Promise((resolve) => {
             const modalDiv = document.createElement('div');
             modalDiv.id = 'ampass-inline-unlock-modal';
             modalDiv.innerHTML = `
@@ -504,6 +509,7 @@ const AMPassCrypto = (function() {
 
             btnCancel.addEventListener('click', () => {
                 modalDiv.remove();
+                activeUnlockPromise = null;
                 resolve(false);
             });
 
@@ -545,6 +551,7 @@ const AMPassCrypto = (function() {
                     }
 
                     modalDiv.remove();
+                    activeUnlockPromise = null;
                     resolve(true);
 
                 } catch (err) {
@@ -560,6 +567,8 @@ const AMPassCrypto = (function() {
                 }
             });
         });
+
+        return activeUnlockPromise;
     }
 
     // Public API
