@@ -526,7 +526,21 @@ const AMPassCrypto = (function() {
 
                 try {
                     const baseUrl = (window.AMPass && window.AMPass.baseUrl) || '';
-                    const csrfToken = (window.AMPass && window.AMPass.csrfToken) || '';
+                    
+                    // Fetch a fresh CSRF token from the server to guarantee validity (e.g. after idle lockouts)
+                    let csrfToken = (window.AMPass && window.AMPass.csrfToken) || '';
+                    try {
+                        const csrfResp = await fetch(baseUrl + '/api/auth/csrfToken');
+                        const csrfData = await csrfResp.json();
+                        if (csrfResp.ok && csrfData.success && csrfData.csrf_token) {
+                            csrfToken = csrfData.csrf_token;
+                            if (window.AMPass) {
+                                window.AMPass.csrfToken = csrfToken;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Failed to refresh CSRF token, attempting with existing:', e);
+                    }
 
                     const paramsResp = await fetch(baseUrl + '/api/auth/derivation-params');
                     const paramsData = await paramsResp.json();
