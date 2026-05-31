@@ -235,11 +235,11 @@ $csrfToken = CSRF::generateToken();
             currentRoute: '<?= $currentRoute ?>'
         };
     </script>
-    <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
-    <script src="<?= APP_URL ?>/public/js/app.js"></script>
-    <script src="<?= APP_URL ?>/public/js/vault.js"></script>
+    <script src="<?= APP_URL ?>/public/js/crypto.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/app.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/vault.js?v=<?= time() ?>"></script>
     <?php if (strpos($currentRoute, 'generator') !== false): ?>
-    <script src="<?= APP_URL ?>/public/js/generator.js"></script>
+    <script src="<?= APP_URL ?>/public/js/generator.js?v=<?= time() ?>"></script>
     <?php endif; ?>
     <!-- Register service worker -->
     <script>

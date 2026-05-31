@@ -61,8 +61,8 @@ require __DIR__ . '/../layouts/auth.php';
     <script>
         window.AMPass = { baseUrl: '<?= APP_URL ?>' };
     </script>
-    <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
-    <script src="<?= APP_URL ?>/public/js/register.js"></script>
-    <script src="<?= APP_URL ?>/public/js/app.js"></script>
+    <script src="<?= APP_URL ?>/public/js/crypto.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/register.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/app.js?v=<?= time() ?>"></script>
 </body>
 </html>

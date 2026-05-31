@@ -87,8 +87,8 @@ if (!$item) { header('Location: ' . APP_URL . '/vault'); exit; }
             currentRoute: 'vault/view'
         };
     </script>
-    <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
-    <script src="<?= APP_URL ?>/public/js/app.js"></script>
-    <script src="<?= APP_URL ?>/public/js/vault-view.js"></script>
+    <script src="<?= APP_URL ?>/public/js/crypto.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/app.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/vault-view.js?v=<?= time() ?>"></script>
 </body>
 </html>

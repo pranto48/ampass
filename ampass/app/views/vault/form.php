@@ -229,8 +229,8 @@ $typeLabels = [
             currentRoute: 'vault/form'
         };
     </script>
-    <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
-    <script src="<?= APP_URL ?>/public/js/app.js"></script>
-    <script src="<?= APP_URL ?>/public/js/vault-form.js"></script>
+    <script src="<?= APP_URL ?>/public/js/crypto.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/app.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/vault-form.js?v=<?= time() ?>"></script>
 </body>
 </html>

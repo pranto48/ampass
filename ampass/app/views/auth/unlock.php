@@ -40,8 +40,8 @@ require __DIR__ . '/../layouts/auth.php';
         </div>
     </div>
 
-    <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
-    <script src="<?= APP_URL ?>/public/js/unlock.js"></script>
-    <script src="<?= APP_URL ?>/public/js/app.js"></script>
+    <script src="<?= APP_URL ?>/public/js/crypto.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/unlock.js?v=<?= time() ?>"></script>
+    <script src="<?= APP_URL ?>/public/js/app.js?v=<?= time() ?>"></script>
 </body>
 </html>
