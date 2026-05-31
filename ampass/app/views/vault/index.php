@@ -138,3 +138,22 @@ $typeLabels = [
         <?php endforeach; ?>
     <?php endif; ?>
 </div>
+
+<!-- Pagination Controls -->
+<?php if (isset($totalPages) && $totalPages > 1): ?>
+<div class="pagination">
+    <?php if ($page > 1): ?>
+        <a href="<?= APP_URL ?>/vault?page=<?= $page - 1 ?><?= $currentType ? '&type=' . $currentType : '' ?><?= $currentFolder ? '&folder=' . $currentFolder : '' ?>" class="btn btn-secondary btn-sm">&larr; Previous</a>
+    <?php else: ?>
+        <button class="btn btn-secondary btn-sm" disabled>&larr; Previous</button>
+    <?php endif; ?>
+
+    <span class="pagination-info">Page <strong><?= $page ?></strong> of <?= $totalPages ?> (Total: <?= $totalItems ?> items)</span>
+
+    <?php if ($page < $totalPages): ?>
+        <a href="<?= APP_URL ?>/vault?page=<?= $page + 1 ?><?= $currentType ? '&type=' . $currentType : '' ?><?= $currentFolder ? '&folder=' . $currentFolder : '' ?>" class="btn btn-secondary btn-sm">Next &rarr;</a>
+    <?php else: ?>
+        <button class="btn btn-secondary btn-sm" disabled>Next &rarr;</button>
+    <?php endif; ?>
+</div>
+<?php endif; ?>

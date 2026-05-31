@@ -546,15 +546,48 @@
 
             // Update title
             const titleEl = item.querySelector('[data-decrypt="title"]');
-            if (titleEl && decrypted.title) titleEl.textContent = decrypted.title;
+            if (titleEl) titleEl.textContent = decrypted.title || 'Untitled';
 
             // Update username/subtitle
             const usernameEl = item.querySelector('[data-decrypt="username"]');
-            if (usernameEl && decrypted.username) usernameEl.textContent = decrypted.username;
+            if (usernameEl) usernameEl.textContent = decrypted.username || '(no username)';
+
+            // Update website favicon
+            const url = decrypted.url || decrypted.website || decrypted.link;
+            if (url) {
+                const domain = extractDomain(url);
+                if (domain) {
+                    const iconEl = item.querySelector('.vault-item-icon');
+                    if (iconEl) {
+                        iconEl.innerHTML = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:20px; height:20px; border-radius:4px; object-fit:contain; display:block;">`;
+                        iconEl.style.background = 'transparent';
+                    }
+                }
+            }
 
         } catch (e) {
             console.warn('Failed to decrypt item:', e.message);
         }
+    }
+
+    /**
+     * Helper to extract domain name from a URL
+     */
+    function extractDomain(url) {
+        if (!url) return '';
+        let host = url;
+        try {
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+            host = new URL(url).hostname;
+        } catch (e) {
+            // Keep as is
+        }
+        if (host.startsWith('www.')) {
+            host = host.substring(4);
+        }
+        return host.toLowerCase().trim();
     }
 
 

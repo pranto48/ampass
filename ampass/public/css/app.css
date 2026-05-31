@@ -708,3 +708,22 @@ input, select, textarea { font-family: var(--font); }
     .main-content { margin-left: 0 !important; }
     .vault-item-actions { display: none !important; }
 }
+
+/* Vault List Pagination Styling */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 28px;
+    padding: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+.pagination-info {
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+}
+

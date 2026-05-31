@@ -9,9 +9,9 @@
 class VaultItem {
 
     /**
-     * Get all vault items for a user (encrypted data)
+     * Get all vault items for a user (encrypted data) with optional pagination
      */
-    public static function getAllByUser(int $userId, ?string $type = null, ?int $folderId = null): array {
+    public static function getAllByUser(int $userId, ?string $type = null, ?int $folderId = null, ?int $limit = null, ?int $offset = null): array {
         $sql = "SELECT vi.*, f.name as folder_name 
                 FROM vault_items vi 
                 LEFT JOIN folders f ON vi.folder_id = f.id 
@@ -30,7 +30,32 @@ class VaultItem {
 
         $sql .= " ORDER BY vi.is_favorite DESC, vi.updated_at DESC";
 
+        if ($limit !== null && $offset !== null) {
+            $sql .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+        }
+
         return Database::fetchAll($sql, $params);
+    }
+
+    /**
+     * Count all vault items for a user matching parameters (for pagination)
+     */
+    public static function countAllByUser(int $userId, ?string $type = null, ?int $folderId = null): int {
+        $sql = "SELECT COUNT(*) as cnt FROM vault_items WHERE user_id = ?";
+        $params = [$userId];
+
+        if ($type) {
+            $sql .= " AND item_type = ?";
+            $params[] = $type;
+        }
+
+        if ($folderId !== null) {
+            $sql .= " AND folder_id = ?";
+            $params[] = $folderId;
+        }
+
+        $res = Database::fetchOne($sql, $params);
+        return (int)($res['cnt'] ?? 0);
     }
 
     /**

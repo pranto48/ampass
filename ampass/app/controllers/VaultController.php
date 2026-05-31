@@ -16,7 +16,15 @@ class VaultController {
         $type = $_GET['type'] ?? null;
         $folderId = isset($_GET['folder']) ? (int)$_GET['folder'] : null;
 
-        $items = VaultItem::getAllByUser($userId, $type, $folderId);
+        // Pagination setup
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $limit = 50; // 50 items per page
+        $offset = ($page - 1) * $limit;
+
+        $totalItems = VaultItem::countAllByUser($userId, $type, $folderId);
+        $totalPages = (int)ceil($totalItems / $limit);
+
+        $items = VaultItem::getAllByUser($userId, $type, $folderId, $limit, $offset);
         $folders = Folder::getAllByUser($userId);
         $csrfToken = CSRF::generateToken();
 
@@ -25,7 +33,10 @@ class VaultController {
             'folders' => $folders,
             'currentType' => $type,
             'currentFolder' => $folderId,
-            'csrfToken' => $csrfToken
+            'csrfToken' => $csrfToken,
+            'page' => $page,
+            'totalPages' => $totalPages,
+            'totalItems' => $totalItems
         ];
 
         require __DIR__ . '/../views/layouts/app.php';
