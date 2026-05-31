@@ -4,9 +4,16 @@ $folders = $data['folders'] ?? [];
 $history = $data['history'] ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('ampass_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Import Passwords - AMPass</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= APP_URL ?>/public/css/app.css">
@@ -135,27 +142,12 @@ $history = $data['history'] ?? [];
 window.AMPass = {
     baseUrl: '<?= APP_URL ?>',
     csrfToken: '<?= $csrfToken ?>',
-    vaultUnlocked: <?= Session::isVaultUnlocked() ? 'true' : 'false' ?>
+    vaultUnlocked: <?= Session::isVaultUnlocked() ? 'true' : 'false' ?>,
+    currentRoute: 'import'
 };
 </script>
 <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
-<script>
-// CRITICAL: Restore vault key from sessionStorage before import.js loads.
-// Without this, AMPassCrypto.isUnlocked() returns false and all encryptions fail.
-(async function() {
-    if (window.AMPass.vaultUnlocked && typeof AMPassCrypto !== 'undefined') {
-        const restored = await AMPassCrypto.restoreVaultKey();
-        if (!restored) {
-            const warn = document.createElement('div');
-            warn.className = 'alert alert-error';
-            warn.style.marginBottom = '16px';
-            warn.innerHTML = '&#9888; <strong>Vault key not available.</strong> Please <a href="' + window.AMPass.baseUrl + '/vault" style="color:#fca5a5;text-decoration:underline;">go to Vault</a> and unlock first, then return here to import.';
-            const formPage = document.querySelector('.form-page');
-            if (formPage) formPage.insertBefore(warn, formPage.children[1]);
-        }
-    }
-})();
-</script>
+<script src="<?= APP_URL ?>/public/js/app.js"></script>
 <script src="<?= APP_URL ?>/public/js/import.js"></script>
 </body>
 </html>

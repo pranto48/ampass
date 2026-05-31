@@ -15,10 +15,9 @@
     // ===== Initialize =====
     async function init() {
         // Restore vault key
-        const restored = await AMPassCrypto.restoreVaultKey();
+        const restored = await AMPassCrypto.ensureVaultKeyUnlocked();
         if (!restored) {
-            alert('Vault is locked. Please unlock first.');
-            window.location.href = window.AMPass.baseUrl + '/unlock';
+            window.location.href = window.AMPass.baseUrl + '/vault';
             return;
         }
 

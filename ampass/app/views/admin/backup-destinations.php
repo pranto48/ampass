@@ -8,8 +8,16 @@ $preselectedBackup = $data['preselected_backup'] ?? null;
 $redirectUri = htmlspecialchars(rtrim(APP_URL, '/')) . '/admin/backup-destinations/onedrive-callback';
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Backup Destinations - AMPass Admin</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="<?= APP_URL ?>/public/css/app.css"></head>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('ampass_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Backup Destinations - AMPass Admin</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="<?= APP_URL ?>/public/css/app.css"></head>
 <body>
 <div class="admin-page">
     <div class="admin-header"><a href="<?= APP_URL ?>/admin" class="btn-back">&larr; Admin</a><h1>Remote Backup Destinations</h1></div>

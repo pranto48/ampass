@@ -4,9 +4,15 @@
  */
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('ampass_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="AMPass - Secure Password Vault">
     <meta name="theme-color" content="#1e1b4b">

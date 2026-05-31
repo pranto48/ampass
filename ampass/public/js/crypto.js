@@ -428,6 +428,140 @@ const AMPassCrypto = (function() {
         return { label: 'Very Weak', class: 'strength-terrible' };
     }
 
+    /**
+     * Ensure vault key is unlocked. If not, presents a beautiful inline modal prompting the user to unlock.
+     * Resolves to true if key is available or successfully derived, false if cancelled.
+     */
+    async function ensureVaultKeyUnlocked() {
+        if (isUnlocked()) return true;
+
+        const restored = await restoreVaultKey();
+        if (restored) return true;
+
+        return new Promise((resolve) => {
+            const modalDiv = document.createElement('div');
+            modalDiv.id = 'ampass-inline-unlock-modal';
+            modalDiv.innerHTML = `
+                <div class="modal-overlay show" style="z-index: 9999; display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);">
+                    <div class="modal" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; max-width: 420px; width: 100%; box-shadow: var(--shadow-xl);">
+                        <div class="modal-title" style="font-size:1.2rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--accent);"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                            Unlock Vault
+                        </div>
+                        <div class="modal-body" style="font-size:0.86rem; color:var(--text-secondary); line-height:1.6;">
+                            <p style="margin-bottom:16px;">Your vault is locked. Enter your master password to decrypt and verify your vault items.</p>
+                            <form id="inlineUnlockForm" style="display:block;">
+                                <div class="form-group" style="margin-bottom:16px;">
+                                    <label for="inline_master_password" class="form-label" style="display:block; margin-bottom:6px; font-weight:550; font-size:0.78rem;">Master Password</label>
+                                    <div class="input-wrapper" style="position:relative; display:flex; align-items:center;">
+                                        <input type="password" id="inline_master_password" class="form-input" placeholder="Enter your master password" required autofocus style="width:100%; padding:10px 14px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text);" autocomplete="current-password">
+                                        <button type="button" class="input-toggle-password" id="toggleInlinePassword" style="position:absolute; right:10px; background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px;">
+                                            <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;display:none;"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                        </button>
+                                    </div>
+                                    <div class="alert alert-error" id="inlineUnlockError" style="display:none; margin-top:12px; font-size:0.82rem; padding:10px 12px; border-radius:var(--radius);"></div>
+                                </div>
+                                <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px;">
+                                    <button type="button" class="btn btn-secondary" id="btnInlineUnlockCancel" style="padding:8px 14px; font-size:0.82rem; border-radius:var(--radius); cursor:pointer; font-weight:550;">Cancel</button>
+                                    <button type="submit" class="btn btn-primary" id="btnInlineUnlockSubmit" style="padding:8px 14px; font-size:0.82rem; border-radius:var(--radius); cursor:pointer; font-weight:550; display:inline-flex; align-items:center; gap:6px;">
+                                        <span class="spinner" id="inlineUnlockSpinner" style="display:none; width: 14px; height: 14px; border:2px solid var(--border); border-top-color:var(--text-inverse); border-radius:50%; animation:spin 0.7s linear infinite;"></span>
+                                        <span id="btnInlineUnlockText">Unlock</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modalDiv);
+
+            const toggleBtn = modalDiv.querySelector('#toggleInlinePassword');
+            const passInput = modalDiv.querySelector('#inline_master_password');
+            const eyeOpen = toggleBtn.querySelector('.eye-open');
+            const eyeClosed = toggleBtn.querySelector('.eye-closed');
+
+            toggleBtn.addEventListener('click', () => {
+                if (passInput.type === 'password') {
+                    passInput.type = 'text';
+                    eyeOpen.style.display = 'none';
+                    eyeClosed.style.display = 'block';
+                } else {
+                    passInput.type = 'password';
+                    eyeOpen.style.display = 'block';
+                    eyeClosed.style.display = 'none';
+                }
+            });
+
+            const form = modalDiv.querySelector('#inlineUnlockForm');
+            const errorDiv = modalDiv.querySelector('#inlineUnlockError');
+            const spinner = modalDiv.querySelector('#inlineUnlockSpinner');
+            const btnText = modalDiv.querySelector('#btnInlineUnlockText');
+            const btnSubmit = modalDiv.querySelector('#btnInlineUnlockSubmit');
+            const btnCancel = modalDiv.querySelector('#btnInlineUnlockCancel');
+
+            passInput.focus();
+
+            btnCancel.addEventListener('click', () => {
+                modalDiv.remove();
+                resolve(false);
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const password = passInput.value;
+                if (!password) return;
+
+                spinner.style.display = 'inline-block';
+                btnText.textContent = 'Deriving Key...';
+                btnSubmit.disabled = true;
+                btnCancel.disabled = true;
+                errorDiv.style.display = 'none';
+
+                try {
+                    const paramsResp = await fetch(window.AMPass.baseUrl + '/api/auth/derivation-params');
+                    const paramsData = await paramsResp.json();
+                    if (!paramsResp.ok || !paramsData.success) {
+                        throw new Error(paramsData.error || 'Failed to fetch security settings');
+                    }
+                    const params = paramsData.params;
+
+                    // Derive wrapping key and decrypt vault key
+                    await unlockVault(password, params);
+
+                    // Call verify-master to verify master password and sync PHP session
+                    const verifyResp = await fetch(window.AMPass.baseUrl + '/api/auth/verify-master', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': window.AMPass.csrfToken || ''
+                        },
+                        body: JSON.stringify({ master_password: password })
+                    });
+                    
+                    const verifyData = await verifyResp.json();
+                    if (!verifyResp.ok || !verifyData.success) {
+                        throw new Error(verifyData.error || 'Failed to verify password with server');
+                    }
+
+                    modalDiv.remove();
+                    resolve(true);
+
+                } catch (err) {
+                    console.error('Inline unlock failed:', err);
+                    errorDiv.textContent = err.message || 'Invalid master password';
+                    errorDiv.style.display = 'block';
+                    
+                    spinner.style.display = 'none';
+                    btnText.textContent = 'Unlock';
+                    btnSubmit.disabled = false;
+                    btnCancel.disabled = false;
+                    passInput.focus();
+                }
+            });
+        });
+    }
+
     // Public API
     return {
         generateSalt,
@@ -438,6 +572,7 @@ const AMPassCrypto = (function() {
         setupNewUser,
         unlockVault,
         restoreVaultKey,
+        ensureVaultKeyUnlocked,
         lockVault,
         isUnlocked,
         encryptVaultItem,

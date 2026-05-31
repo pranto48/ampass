@@ -9,7 +9,7 @@
     // ===== Theme Management =====
     const ThemeManager = {
         init() {
-            const saved = localStorage.getItem('ampass_theme') || 'dark';
+            const saved = localStorage.getItem('ampass_theme') || 'light';
             document.documentElement.setAttribute('data-theme', saved);
             this.bindToggle();
         },
@@ -18,7 +18,7 @@
             const toggle = document.getElementById('themeToggle');
             if (toggle) {
                 toggle.addEventListener('click', () => {
-                    const current = document.documentElement.getAttribute('data-theme');
+                    const current = document.documentElement.getAttribute('data-theme') || 'light';
                     const next = current === 'dark' ? 'light' : 'dark';
                     document.documentElement.setAttribute('data-theme', next);
                     localStorage.setItem('ampass_theme', next);
@@ -352,10 +352,61 @@
                 if (restored) {
                     // Decrypt visible vault items
                     decryptVisibleItems();
+                } else {
+                    handleLockedVault();
                 }
             });
         }
     });
+
+    function handleLockedVault() {
+        const requireUnlockRoutes = ['vault', 'dashboard', 'import', 'vault/add', 'vault/edit', 'vault/view', 'vault/form'];
+        const currentRoute = (window.AMPass && window.AMPass.currentRoute) || '';
+        const requiresUnlock = requireUnlockRoutes.some(r => currentRoute === r || currentRoute.startsWith(r + '/'));
+
+        if (!requiresUnlock) return;
+
+        let container = document.querySelector('.page-content') || document.querySelector('.form-page');
+        if (!container) return;
+
+        triggerUnlockFlow(container);
+    }
+
+    async function triggerUnlockFlow(container) {
+        const unlocked = await AMPassCrypto.ensureVaultKeyUnlocked();
+        if (unlocked) {
+            const banner = document.getElementById('vaultLockedBanner');
+            if (banner) banner.remove();
+            
+            if (typeof decryptVisibleItems === 'function') {
+                decryptVisibleItems();
+            }
+
+            if (window.AMPass && window.AMPass.currentRoute === 'import') {
+                window.location.reload();
+            }
+        } else {
+            if (!document.getElementById('vaultLockedBanner')) {
+                const banner = document.createElement('div');
+                banner.id = 'vaultLockedBanner';
+                banner.className = 'alert alert-warning';
+                banner.style.display = 'flex';
+                banner.style.justifyContent = 'space-between';
+                banner.style.alignItems = 'center';
+                banner.style.gap = '12px';
+                banner.style.marginBottom = '18px';
+                banner.innerHTML = `
+                    <span>&#9888; <strong>Vault is locked.</strong> Unlock to decrypt and use your vault items.</span>
+                    <button class="btn btn-sm btn-primary" id="btnBannerUnlock" style="padding: 6px 12px; font-size: 0.78rem;">Unlock Vault</button>
+                `;
+                container.insertBefore(banner, container.firstChild);
+
+                document.getElementById('btnBannerUnlock').addEventListener('click', () => {
+                    triggerUnlockFlow(container);
+                });
+            }
+        }
+    }
 
     /**
      * Decrypt all visible vault items on the page

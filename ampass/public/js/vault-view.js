@@ -10,9 +10,9 @@
     if (!itemView) return;
 
     async function init() {
-        const restored = await AMPassCrypto.restoreVaultKey();
+        const restored = await AMPassCrypto.ensureVaultKeyUnlocked();
         if (!restored) {
-            window.location.href = window.AMPass.baseUrl + '/unlock';
+            window.location.href = window.AMPass.baseUrl + '/vault';
             return;
         }
 

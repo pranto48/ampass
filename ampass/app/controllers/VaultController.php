@@ -48,12 +48,8 @@ class VaultController {
     }
 
     public function import(): void {
-        $userId = Session::getUserId();
-        $folders = Folder::getAllByUser($userId);
-        $csrfToken = CSRF::generateToken();
-
-        $data = ['folders' => $folders, 'csrfToken' => $csrfToken];
-        require __DIR__ . '/../views/vault/import.php';
+        header('Location: ' . APP_URL . '/import');
+        exit;
     }
 
     public function edit(?string $id = null): void {

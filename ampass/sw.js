@@ -76,17 +76,17 @@ self.addEventListener('fetch', (event) => {
 
 function getOfflinePage() {
     return `<!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMPass - Offline</title>
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f0d1a; color: #f0eef5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; padding: 20px; }
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; padding: 20px; }
         .offline-container { max-width: 400px; }
         .offline-icon { font-size: 4rem; margin-bottom: 16px; }
         h1 { font-size: 1.5rem; margin-bottom: 8px; }
-        p { color: #a09bb5; margin-bottom: 20px; }
+        p { color: #475569; margin-bottom: 20px; }
         .btn { display: inline-block; padding: 12px 24px; background: #6366f1; color: white; border-radius: 8px; text-decoration: none; font-weight: 500; }
     </style>
 </head>

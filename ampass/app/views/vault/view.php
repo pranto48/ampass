@@ -7,9 +7,15 @@ $csrfToken = $data['csrfToken'] ?? CSRF::generateToken();
 if (!$item) { header('Location: ' . APP_URL . '/vault'); exit; }
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('ampass_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>View Item - AMPass</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -77,10 +83,12 @@ if (!$item) { header('Location: ' . APP_URL . '/vault'); exit; }
         window.AMPass = {
             baseUrl: '<?= APP_URL ?>',
             csrfToken: '<?= $csrfToken ?>',
-            vaultUnlocked: true
+            vaultUnlocked: <?= Session::isVaultUnlocked() ? 'true' : 'false' ?>,
+            currentRoute: 'vault/view'
         };
     </script>
     <script src="<?= APP_URL ?>/public/js/crypto.js"></script>
+    <script src="<?= APP_URL ?>/public/js/app.js"></script>
     <script src="<?= APP_URL ?>/public/js/vault-view.js"></script>
 </body>
 </html>
