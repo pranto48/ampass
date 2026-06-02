@@ -788,7 +788,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'ampass-fill-login',
     title: 'Fill login with AMPass',
-    contexts: ['editable', 'password']
+    contexts: ['editable']
   });
   chrome.contextMenus.create({
     id: 'ampass-fill-identity',
@@ -798,7 +798,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'ampass-generate-password',
     title: 'Generate password',
-    contexts: ['editable', 'password']
+    contexts: ['editable']
   });
   chrome.contextMenus.create({
     id: 'ampass-open',
