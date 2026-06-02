@@ -26,15 +26,15 @@ class AuditLog {
     }
 
     /**
-     * Count failed logins for a specific login username in the last N hours
+     * Count failed logins for a specific login username or email in the last N hours
      */
-    public static function countRecentFailedLogins(string $login, int $hours = 24): int {
+    public static function countRecentFailedLogins(string $username, string $email, int $hours = 24): int {
         $result = Database::fetchOne(
             "SELECT COUNT(*) as total FROM audit_logs 
              WHERE action = 'login_failed' 
-             AND details LIKE ? 
+             AND (details LIKE ? OR details LIKE ?)
              AND created_at > DATE_SUB(NOW(), INTERVAL ? HOUR)",
-            ['%"login":"' . $login . '"%', $hours]
+            ['%"login":"' . $username . '"%', '%"login":"' . $email . '"%', $hours]
         );
         return (int) ($result['total'] ?? 0);
     }

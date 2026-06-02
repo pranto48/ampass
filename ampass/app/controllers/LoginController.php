@@ -93,7 +93,7 @@ class LoginController {
             }
             if ($requireFailedLogins) {
                 // Count failed logins for this user in the last 24 hours
-                $failedAttempts = AuditLog::countRecentFailedLogins($user['username']);
+                $failedAttempts = AuditLog::countRecentFailedLogins($user['username'], $user['email']);
                 if ($failedAttempts >= 10) {
                     $require2FA = true;
                 }
