@@ -51,7 +51,7 @@
         // Check if user explicitly allowed HTTP autofill
         chrome.storage.local.get('settings', (result) => {
           const settings = result.settings || {};
-          if (!settings.allowHttpAutofill) {
+          if (settings.allowHttpAutofill === false) {
             sendResponse({ success: false, error: 'Autofill blocked on HTTP page' });
             return;
           }

@@ -420,7 +420,7 @@
       // Check if HTTP autofill is allowed
       chrome.storage.local.get('settings', (result) => {
         const settings = result.settings || {};
-        if (!settings.allowHttpAutofill) {
+        if (settings.allowHttpAutofill === false) {
           showAmpassInlineMessage(icon, 'Autofill blocked on HTTP page. Enable in extension settings.', null);
           return;
         }

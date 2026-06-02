@@ -88,7 +88,7 @@ const Storage = {
       clipboardClearSeconds: 30,
       lockTimeoutMinutes: 30,
       theme: 'system',
-      allowHttpAutofill: false,
+      allowHttpAutofill: true,
       useDesktopBridge: false,
       trustBrowser: false
     };
