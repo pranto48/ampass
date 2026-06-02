@@ -21,6 +21,26 @@ class Database {
                     PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
                 ];
                 self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
+                
+                // Self-healing database schema updates for 2FA settings
+                try {
+                    $stmt = self::$instance->query("SHOW COLUMNS FROM users");
+                    $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $hasNewDeviceCol = false;
+                    $hasFailedLoginsCol = false;
+                    foreach ($columns as $col) {
+                        if ($col['Field'] === 'two_factor_new_device') $hasNewDeviceCol = true;
+                        if ($col['Field'] === 'two_factor_failed_logins') $hasFailedLoginsCol = true;
+                    }
+                    if (!$hasNewDeviceCol) {
+                        self::$instance->exec("ALTER TABLE users ADD COLUMN two_factor_new_device TINYINT(1) DEFAULT 0");
+                    }
+                    if (!$hasFailedLoginsCol) {
+                        self::$instance->exec("ALTER TABLE users ADD COLUMN two_factor_failed_logins TINYINT(1) DEFAULT 0");
+                    }
+                } catch (\Exception $schemaEx) {
+                    // Ignore schema checking errors
+                }
             } catch (PDOException $e) {
                 if (defined('DEBUG_MODE') && DEBUG_MODE) {
                     // SECURITY: Only show details in debug mode (NEVER enable in production)

@@ -13,7 +13,8 @@ class User {
     public static function findById(int $id): ?array {
         return Database::fetchOne(
             "SELECT id, username, email, full_name, role, status, force_password_reset, 
-                    two_factor_enabled, avatar_url, created_at, updated_at, last_login_at 
+                    two_factor_enabled, two_factor_new_device, two_factor_failed_logins, 
+                    avatar_url, created_at, updated_at, last_login_at 
              FROM users WHERE id = ?",
             [$id]
         );

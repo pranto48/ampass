@@ -166,4 +166,136 @@ class SettingsController {
         header('Location: ' . APP_URL . '/settings/tokens');
         exit;
     }
+
+    public function twoFactor(): void {
+        $userId = Session::getUserId();
+        $user = User::findById($userId);
+        $csrfToken = CSRF::generateToken();
+
+        $secret = '';
+        $qrCodeUrl = '';
+
+        if (!$user['two_factor_enabled']) {
+            $secret = Session::get('pending_2fa_secret');
+            if (empty($secret)) {
+                $secret = GoogleAuthenticator::generateSecret();
+                Session::set('pending_2fa_secret', $secret);
+            }
+            $qrCodeUrl = GoogleAuthenticator::getQRCodeUrl($user['username'], $secret);
+        }
+
+        $data = [
+            'user' => $user,
+            'secret' => $secret,
+            'qrCodeUrl' => $qrCodeUrl,
+            'csrfToken' => $csrfToken,
+            'pageTitle' => 'Two-Factor Authentication (2FA)'
+        ];
+
+        require __DIR__ . '/../views/layouts/app.php';
+    }
+
+    public function enableTwoFactor(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+        CSRF::validateOrFail();
+
+        $userId = Session::getUserId();
+        $code = trim($_POST['code'] ?? '');
+        $secret = Session::get('pending_2fa_secret');
+
+        if (empty($secret)) {
+            Session::flash('error', '2FA setup session expired. Please try again.');
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+
+        if (!GoogleAuthenticator::verifyCode($secret, $code)) {
+            Session::flash('error', 'Invalid verification code. Please try scanning again.');
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+
+        // Encrypt secret for DB
+        $encryptedSecret = GoogleAuthenticator::encryptSecret($secret);
+
+        // Update database
+        Database::execute(
+            "UPDATE users SET two_factor_enabled = 1, two_factor_secret_encrypted = ? WHERE id = ?",
+            [$encryptedSecret, $userId]
+        );
+
+        // Clear session pending secret
+        Session::set('pending_2fa_secret', null);
+
+        AuditLog::log('2fa_enabled', $userId);
+        Session::flash('success', 'Two-factor authentication enabled successfully.');
+        header('Location: ' . APP_URL . '/settings/twoFactor');
+        exit;
+    }
+
+    public function disableTwoFactor(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+        CSRF::validateOrFail();
+
+        $userId = Session::getUserId();
+        $code = trim($_POST['code'] ?? '');
+
+        // Fetch user's encrypted secret
+        $user = Database::fetchOne("SELECT two_factor_secret_encrypted FROM users WHERE id = ?", [$userId]);
+        if (!$user || empty($user['two_factor_secret_encrypted'])) {
+            Session::flash('error', '2FA is not enabled.');
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+
+        $secret = GoogleAuthenticator::decryptSecret($user['two_factor_secret_encrypted']);
+
+        if (!GoogleAuthenticator::verifyCode($secret, $code)) {
+            Session::flash('error', 'Invalid authenticator code. 2FA was not disabled.');
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+
+        // Disable 2FA
+        Database::execute(
+            "UPDATE users SET two_factor_enabled = 0, two_factor_secret_encrypted = NULL, two_factor_new_device = 0, two_factor_failed_logins = 0 WHERE id = ?",
+            [$userId]
+        );
+
+        // Clean up trusted devices since 2FA is disabled
+        Database::execute("DELETE FROM devices WHERE user_id = ?", [$userId]);
+
+        AuditLog::log('2fa_disabled', $userId);
+        Session::flash('success', 'Two-factor authentication has been disabled.');
+        header('Location: ' . APP_URL . '/settings/twoFactor');
+        exit;
+    }
+
+    public function updateTwoFactorOptions(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . APP_URL . '/settings/twoFactor');
+            exit;
+        }
+        CSRF::validateOrFail();
+
+        $userId = Session::getUserId();
+        $newDevice = isset($_POST['two_factor_new_device']) ? 1 : 0;
+        $failedLogins = isset($_POST['two_factor_failed_logins']) ? 1 : 0;
+
+        Database::execute(
+            "UPDATE users SET two_factor_new_device = ?, two_factor_failed_logins = ? WHERE id = ?",
+            [$newDevice, $failedLogins, $userId]
+        );
+
+        AuditLog::log('2fa_options_updated', $userId);
+        Session::flash('success', '2FA trigger conditions updated.');
+        header('Location: ' . APP_URL . '/settings/twoFactor');
+        exit;
+    }
 }

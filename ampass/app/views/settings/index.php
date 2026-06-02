@@ -61,6 +61,13 @@ $error = Session::flash('error');
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                 </a>
+                <a href="<?= APP_URL ?>/settings/twoFactor" class="settings-link">
+                    <div class="settings-link-info">
+                        <span class="settings-link-title">Two-Factor Authentication (2FA)</span>
+                        <span class="settings-link-desc">Set up Google Authenticator or configure 2FA login triggers</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </a>
                 <a href="<?= APP_URL ?>/settings/security" class="settings-link">
                     <div class="settings-link-info">
                         <span class="settings-link-title">Security Log</span>

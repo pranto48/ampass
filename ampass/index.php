@@ -23,6 +23,7 @@ require_once __DIR__ . '/app/core/Session.php';
 require_once __DIR__ . '/app/core/CSRF.php';
 require_once __DIR__ . '/app/core/RateLimit.php';
 require_once __DIR__ . '/app/core/Security.php';
+require_once __DIR__ . '/app/core/GoogleAuthenticator.php';
 
 // Initialize security headers
 Security::setHeaders();
