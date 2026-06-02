@@ -212,6 +212,7 @@
       addFieldIndicator(pwField, formData);
       if (usernameField) {
         usernameField.setAttribute(AMPASS_ATTR, 'true');
+        addFieldIndicator(usernameField, formData);
       }
     });
 
@@ -343,7 +344,25 @@
       clearTimeout(field.__ampassFocusTimer);
       field.__ampassFocusTimer = setTimeout(() => {
         if (document.activeElement === field && !document.getElementById('ampass-credential-dropdown')) {
-          handleFieldIconClick(icon, formData);
+          // Check if there are matches before showing the dropdown automatically
+          if (formData.type === 'login') {
+            chrome.runtime.sendMessage({
+              type: 'GET_MATCHES',
+              payload: { url: window.location.href }
+            }).then(response => {
+              if (response && response.success && response.items && response.items.length > 0) {
+                handleFieldIconClick(icon, formData);
+              }
+            }).catch(() => {});
+          } else if (formData.type === 'identity') {
+            chrome.runtime.sendMessage({
+              type: 'GET_IDENTITIES'
+            }).then(response => {
+              if (response && response.success && response.items && response.items.length > 0) {
+                handleFieldIconClick(icon, formData);
+              }
+            }).catch(() => {});
+          }
         }
       }, 400);
     });
