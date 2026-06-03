@@ -408,7 +408,6 @@
    * Checks vault status, gets matches, shows dropdown or fills directly.
    */
   function handleFieldIconClick(icon, formData) {
-    // Remove any existing dropdown
     removeAmpassDropdown();
 
     // Check HTTP security
@@ -417,20 +416,247 @@
     const isHttps = url.startsWith('https://');
 
     if (!isHttps && !isLocalhost) {
-      // Check if HTTP autofill is allowed
       chrome.storage.local.get('settings', (result) => {
         const settings = result.settings || {};
         if (settings.allowHttpAutofill === false) {
           showAmpassInlineMessage(icon, 'Autofill blocked on HTTP page. Enable in extension settings.', null);
           return;
         }
-        // HTTP allowed — proceed
-        fetchVaultDataAndShowDropdown(icon, formData);
+        processFieldIconClick(icon, formData);
       });
       return;
     }
 
-    fetchVaultDataAndShowDropdown(icon, formData);
+    processFieldIconClick(icon, formData);
+  }
+
+  function processFieldIconClick(icon, formData) {
+    chrome.runtime.sendMessage({ type: 'GET_STATUS' }).then(status => {
+      if (!status) {
+        showAmpassInlineMessage(icon, 'Could not connect to AMPass.', 'Open AMPass');
+        return;
+      }
+
+      if (!status.configured) {
+        showAmpassInlineMessage(icon, 'AMPass is not configured. Please click the extension icon to set up.', null);
+        return;
+      }
+
+      if (!status.authenticated || !status.unlocked) {
+        showAmpassAuthForm(icon, status, formData);
+        return;
+      }
+
+      fetchVaultDataAndShowDropdown(icon, formData);
+    }).catch(() => {
+      showAmpassInlineMessage(icon, 'Could not connect to AMPass.', null);
+    });
+  }
+
+  function showAmpassAuthForm(icon, status, formData) {
+    removeAmpassDropdown();
+
+    const bubble = document.createElement('div');
+    bubble.id = 'ampass-credential-dropdown';
+    bubble.style.cssText = `
+      position: fixed; z-index: 2147483647;
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 16px; width: 280px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #fafafa; font-size: 13px;
+    `;
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight: 600; font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: #fafafa;';
+    
+    const isLoginState = !status.authenticated;
+    title.innerHTML = isLoginState 
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3"/></svg> Sign In to AMPass`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Unlock Vault`;
+    bubble.appendChild(title);
+
+    const form = document.createElement('form');
+    form.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
+
+    const errEl = document.createElement('div');
+    errEl.style.cssText = 'color: #ef4444; font-size: 11px; display: none; word-break: break-word;';
+    form.appendChild(errEl);
+
+    if (isLoginState) {
+      const usernameInput = document.createElement('input');
+      usernameInput.type = 'text';
+      usernameInput.placeholder = 'Username or Email';
+      usernameInput.style.cssText = 'background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 8px 10px; color: white; outline: none; font-size: 12px;';
+      form.appendChild(usernameInput);
+
+      const pwWrapper = document.createElement('div');
+      pwWrapper.style.cssText = 'position: relative;';
+
+      const passwordInput = document.createElement('input');
+      passwordInput.type = 'password';
+      passwordInput.placeholder = 'Password';
+      passwordInput.style.cssText = 'background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 8px 30px 8px 10px; color: white; outline: none; font-size: 12px; width: 100%; box-sizing: border-box;';
+      pwWrapper.appendChild(passwordInput);
+
+      const eyeBtn = document.createElement('span');
+      eyeBtn.innerHTML = '👁️';
+      eyeBtn.style.cssText = 'position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 12px; opacity: 0.6;';
+      eyeBtn.addEventListener('click', () => {
+        passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+        eyeBtn.innerHTML = passwordInput.type === 'password' ? '👁️' : '🙈';
+      });
+      pwWrapper.appendChild(eyeBtn);
+      form.appendChild(pwWrapper);
+
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'submit';
+      submitBtn.textContent = 'Sign In';
+      submitBtn.style.cssText = 'background: #6366f1; color: white; border: none; border-radius: 6px; padding: 8px; font-weight: 600; cursor: pointer; font-size: 12px;';
+      form.appendChild(submitBtn);
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const un = usernameInput.value.trim();
+        const pw = passwordInput.value;
+        if (!un || !pw) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Signing in...';
+        errEl.style.display = 'none';
+
+        chrome.runtime.sendMessage({
+          type: 'LOGIN',
+          payload: { serverUrl: status.serverUrl, username: un, password: pw, trustBrowser: true }
+        }).then(loginResult => {
+          if (loginResult && loginResult.success) {
+            chrome.runtime.sendMessage({ type: 'GET_STATUS' }).then(newStatus => {
+              showAmpassAuthForm(icon, newStatus, formData);
+            });
+          } else {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Sign In';
+            errEl.textContent = (loginResult && loginResult.error) || 'Login failed';
+            errEl.style.display = 'block';
+          }
+        }).catch(err => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sign In';
+          errEl.textContent = err.message || 'Login failed';
+          errEl.style.display = 'block';
+        });
+      });
+
+    } else {
+      const pwWrapper = document.createElement('div');
+      pwWrapper.style.cssText = 'position: relative;';
+
+      const passwordInput = document.createElement('input');
+      passwordInput.type = 'password';
+      passwordInput.placeholder = 'Master Password';
+      passwordInput.style.cssText = 'background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 8px 30px 8px 10px; color: white; outline: none; font-size: 12px; width: 100%; box-sizing: border-box;';
+      pwWrapper.appendChild(passwordInput);
+
+      const eyeBtn = document.createElement('span');
+      eyeBtn.innerHTML = '👁️';
+      eyeBtn.style.cssText = 'position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 12px; opacity: 0.6;';
+      eyeBtn.addEventListener('click', () => {
+        passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+        eyeBtn.innerHTML = passwordInput.type === 'password' ? '👁️' : '🙈';
+      });
+      pwWrapper.appendChild(eyeBtn);
+      form.appendChild(pwWrapper);
+
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'submit';
+      submitBtn.textContent = 'Unlock Vault';
+      submitBtn.style.cssText = 'background: #6366f1; color: white; border: none; border-radius: 6px; padding: 8px; font-weight: 600; cursor: pointer; font-size: 12px;';
+      form.appendChild(submitBtn);
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pw = passwordInput.value;
+        if (!pw) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Unlocking...';
+        errEl.style.display = 'none';
+
+        chrome.runtime.sendMessage({
+          type: 'UNLOCK',
+          payload: { masterPassword: pw }
+        }).then(unlockResult => {
+          if (unlockResult && unlockResult.success) {
+            removeAmpassDropdown();
+            fetchVaultDataAndShowDropdown(icon, formData);
+          } else {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Unlock Vault';
+            errEl.textContent = (unlockResult && unlockResult.error) || 'Invalid master password';
+            errEl.style.display = 'block';
+          }
+        }).catch(err => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Unlock Vault';
+          errEl.textContent = err.message || 'Unlock failed';
+          errEl.style.display = 'block';
+        });
+      });
+    }
+
+    const divider = document.createElement('div');
+    divider.style.cssText = 'height: 1px; background: #27272a; margin: 12px 0;';
+    form.appendChild(divider);
+
+    const desktopBtn = document.createElement('button');
+    desktopBtn.type = 'button';
+    desktopBtn.textContent = 'Unlock with Desktop App';
+    desktopBtn.style.cssText = 'background: #27272a; border: 1px solid #3f3f46; color: #a1a1aa; border-radius: 6px; padding: 8px; font-weight: 600; cursor: pointer; font-size: 12px;';
+    desktopBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'OPEN_DESKTOP_UNLOCK',
+        payload: { pageHost: window.location.hostname }
+      }).then(response => {
+        if (response && response.success) {
+          removeAmpassDropdown();
+          showAmpassToast('AMPass Desktop opened. Unlock, then click the field icon again.', 'info');
+        } else {
+          errEl.textContent = 'AMPass Desktop bridge not available.';
+          errEl.style.display = 'block';
+        }
+      }).catch(() => {
+        errEl.textContent = 'Could not contact AMPass Desktop.';
+        errEl.style.display = 'block';
+      });
+    });
+    form.appendChild(desktopBtn);
+
+    bubble.appendChild(form);
+    document.body.appendChild(bubble);
+
+    const iconRect = icon.getBoundingClientRect();
+    bubble.style.top = (iconRect.bottom + 4) + 'px';
+    bubble.style.left = Math.max(8, iconRect.right - 280) + 'px';
+
+    requestAnimationFrame(() => {
+      const ddRect = bubble.getBoundingClientRect();
+      if (ddRect.bottom > window.innerHeight - 10) {
+        bubble.style.top = (iconRect.top - ddRect.height - 4) + 'px';
+      }
+      if (ddRect.right > window.innerWidth - 10) {
+        bubble.style.left = (window.innerWidth - ddRect.width - 10) + 'px';
+      }
+    });
+
+    function closeHandler(e) {
+      if (!bubble.contains(e.target) && e.target !== icon) {
+        removeAmpassDropdown();
+        document.removeEventListener('click', closeHandler, true);
+      }
+    }
+    setTimeout(() => {
+      document.addEventListener('click', closeHandler, true);
+    }, 50);
   }
 
   function getPasswordFieldsInForm(formElement) {
@@ -451,32 +677,18 @@
     return !isShowing;
   }
 
-  /**
-   * Fetch logins and identities, then show the unified dropdown
-   */
   function fetchVaultDataAndShowDropdown(icon, formData) {
     chrome.runtime.sendMessage({
       type: 'GET_MATCHES',
       payload: { url: window.location.href }
     }).then(loginResponse => {
-      if (!loginResponse) {
-        showAmpassInlineMessage(icon, 'Could not connect to AMPass.', 'Open AMPass');
-        return;
-      }
-
-      if (loginResponse.code === 'VAULT_LOCKED' || (!loginResponse.success && loginResponse.code === 'VAULT_LOCKED')) {
-        showAmpassInlineMessage(icon, 'Unlock AMPass to autofill', 'Open AMPass');
-        return;
-      }
-
-      if (!loginResponse.success) {
-        showAmpassInlineMessage(icon, loginResponse.error || 'AMPass error', null);
+      if (!loginResponse || !loginResponse.success) {
+        showAmpassInlineMessage(icon, (loginResponse && loginResponse.error) || 'AMPass error', null);
         return;
       }
 
       const loginMatches = loginResponse.items || [];
 
-      // Fetch identities
       chrome.runtime.sendMessage({
         type: 'GET_IDENTITIES'
       }).then(identityResponse => {
