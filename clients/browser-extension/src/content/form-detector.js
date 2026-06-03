@@ -425,206 +425,73 @@
           return;
         }
         // HTTP allowed — proceed
-        if (formData.type === 'identity') {
-          fetchIdentityMatchesAndFill(icon, formData);
-        } else {
-          fetchMatchesAndFill(icon, formData);
-        }
+        fetchVaultDataAndShowDropdown(icon, formData);
       });
       return;
     }
 
-    if (formData.type === 'identity') {
-      fetchIdentityMatchesAndFill(icon, formData);
-    } else {
-      fetchMatchesAndFill(icon, formData);
-    }
+    fetchVaultDataAndShowDropdown(icon, formData);
+  }
+
+  function getPasswordFieldsInForm(formElement) {
+    if (!formElement) return [];
+    return Array.from(formElement.querySelectorAll('input[type="password"], input[data-ampass-original-type="password"]'));
+  }
+
+  function togglePasswordsVisibility(formElement) {
+    const fields = getPasswordFieldsInForm(formElement);
+    if (fields.length === 0) return false;
+    const isShowing = fields[0].type === 'text';
+    fields.forEach(f => {
+      if (!f.hasAttribute('data-ampass-original-type')) {
+        f.setAttribute('data-ampass-original-type', 'password');
+      }
+      f.type = isShowing ? 'password' : 'text';
+    });
+    return !isShowing;
   }
 
   /**
-   * Fetch identity matches and show dropdown or fill directly
+   * Fetch logins and identities, then show the unified dropdown
    */
-  function fetchIdentityMatchesAndFill(icon, formData) {
-    chrome.runtime.sendMessage({
-      type: 'GET_IDENTITIES'
-    }).then(response => {
-      if (!response) {
-        showAmpassInlineMessage(icon, 'Could not connect to AMPass.', 'Open AMPass');
-        return;
-      }
-
-      if (response.code === 'VAULT_LOCKED' || (!response.success && response.code === 'VAULT_LOCKED')) {
-        showAmpassInlineMessage(icon, 'Unlock AMPass to autofill', 'Open AMPass');
-        return;
-      }
-
-      if (!response.success) {
-        showAmpassInlineMessage(icon, response.error || 'AMPass error', null);
-        return;
-      }
-
-      const matches = response.items || [];
-
-      if (matches.length === 0) {
-        showAmpassInlineMessage(icon, 'No saved identities found', 'Open AMPass');
-        return;
-      }
-
-      if (matches.length === 1) {
-        fillSingleIdentityMatch(matches[0], formData);
-        return;
-      }
-
-      showIdentityDropdown(icon, matches, formData);
-    }).catch(() => {
-      showAmpassInlineMessage(icon, 'Could not connect to AMPass.', null);
-    });
-  }
-
-  /**
-   * Fill a single identity profile match
-   */
-  function fillSingleIdentityMatch(match, formData) {
-    chrome.runtime.sendMessage({
-      type: 'DECRYPT_ITEM',
-      payload: { id: match.id }
-    }).then(response => {
-      if (!response || !response.success || !response.item) {
-        showAmpassToast('Could not decrypt this item', 'error');
-        return;
-      }
-
-      const item = response.item;
-      if (window.__ampassAutofillIdentity) {
-        window.__ampassAutofillIdentity(item, formData);
-        showAmpassToast('Filled by AMPass', 'success');
-
-        chrome.runtime.sendMessage({
-          type: 'LOG_USAGE',
-          payload: { item_id: match.id, action: 'autofilled', client_type: 'extension' }
-        }).catch(() => {});
-      } else {
-        showAmpassToast('Autofill script not loaded', 'error');
-      }
-    }).catch(() => {
-      showAmpassToast('Could not decrypt this item', 'error');
-    });
-  }
-
-  /**
-   * Render dropdown for matching identities
-   */
-  function showIdentityDropdown(icon, matches, formData) {
-    removeAmpassDropdown();
-
-    const dropdown = document.createElement('div');
-    dropdown.id = 'ampass-credential-dropdown';
-    dropdown.style.cssText = `
-      position: fixed; z-index: 2147483647;
-      background: #18181b; border: 1px solid #27272a; border-radius: 10px;
-      padding: 6px 0; min-width: 260px; max-width: 340px; max-height: 280px; overflow-y: auto;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      color: #fafafa; font-size: 13px;
-    `;
-
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:8px 14px 6px;font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:0.5px;';
-    header.textContent = 'Choose identity (' + matches.length + ')';
-    dropdown.appendChild(header);
-
-    matches.forEach(match => {
-      const item = document.createElement('div');
-      item.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;flex-direction:column;gap:1px;transition:background 0.15s;';
-      item.innerHTML = `
-        <span style="font-weight:500;color:#fafafa;font-size:13px;">🪪 ${escHtml(match.title || 'Untitled')}</span>
-        <span style="font-size:11px;color:#a1a1aa;">${escHtml(match.name || match.email || '')}</span>
-      `;
-      item.addEventListener('mouseenter', () => item.style.background = '#27272a');
-      item.addEventListener('mouseleave', () => item.style.background = 'transparent');
-      item.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        removeAmpassDropdown();
-        fillSingleIdentityMatch(match, formData);
-      });
-      dropdown.appendChild(item);
-    });
-
-    document.body.appendChild(dropdown);
-
-    const iconRect = icon.getBoundingClientRect();
-    dropdown.style.top = (iconRect.bottom + 4) + 'px';
-    dropdown.style.left = Math.max(8, iconRect.right - 280) + 'px';
-
-    requestAnimationFrame(() => {
-      const ddRect = dropdown.getBoundingClientRect();
-      if (ddRect.bottom > window.innerHeight - 10) {
-        dropdown.style.top = (iconRect.top - ddRect.height - 4) + 'px';
-      }
-      if (ddRect.right > window.innerWidth - 10) {
-        dropdown.style.left = (window.innerWidth - ddRect.width - 10) + 'px';
-      }
-    });
-
-    function closeHandler(e) {
-      if (!dropdown.contains(e.target) && e.target !== icon) {
-        removeAmpassDropdown();
-        document.removeEventListener('click', closeHandler, true);
-      }
-    }
-    setTimeout(() => {
-      document.addEventListener('click', closeHandler, true);
-    }, 50);
-  }
-
-  /**
-   * Fetch matches from service worker and handle the result.
-   */
-  function fetchMatchesAndFill(icon, formData) {
+  function fetchVaultDataAndShowDropdown(icon, formData) {
     chrome.runtime.sendMessage({
       type: 'GET_MATCHES',
       payload: { url: window.location.href }
-    }).then(response => {
-      if (!response) {
+    }).then(loginResponse => {
+      if (!loginResponse) {
         showAmpassInlineMessage(icon, 'Could not connect to AMPass.', 'Open AMPass');
         return;
       }
 
-      // Vault locked
-      if (response.code === 'VAULT_LOCKED' || (!response.success && response.code === 'VAULT_LOCKED')) {
+      if (loginResponse.code === 'VAULT_LOCKED' || (!loginResponse.success && loginResponse.code === 'VAULT_LOCKED')) {
         showAmpassInlineMessage(icon, 'Unlock AMPass to autofill', 'Open AMPass');
         return;
       }
 
-      if (!response.success) {
-        showAmpassInlineMessage(icon, response.error || 'AMPass error', null);
+      if (!loginResponse.success) {
+        showAmpassInlineMessage(icon, loginResponse.error || 'AMPass error', null);
         return;
       }
 
-      const matches = response.items || [];
+      const loginMatches = loginResponse.items || [];
 
-      if (matches.length === 0) {
-        showAmpassInlineMessage(icon, 'No saved login for this site', 'Open AMPass');
-        return;
-      }
-
-      if (matches.length === 1) {
-        // Single match — decrypt and fill directly
-        fillSingleMatch(matches[0], formData);
-        return;
-      }
-
-      // Multiple matches — show dropdown
-      showCredentialDropdown(icon, matches, formData);
-
+      // Fetch identities
+      chrome.runtime.sendMessage({
+        type: 'GET_IDENTITIES'
+      }).then(identityResponse => {
+        const identities = (identityResponse && identityResponse.success) ? (identityResponse.items || []) : [];
+        showUnifiedDropdown(icon, loginMatches, identities, formData);
+      }).catch(() => {
+        showUnifiedDropdown(icon, loginMatches, [], formData);
+      });
     }).catch(() => {
       showAmpassInlineMessage(icon, 'Could not connect to AMPass.', null);
     });
   }
 
   /**
-   * Decrypt a single match and fill the form.
+   * Fill a single login profile match
    */
   function fillSingleMatch(match, formData) {
     chrome.runtime.sendMessage({
@@ -656,14 +523,47 @@
     });
   }
 
-  // ================================================================
-  // DROPDOWN UI
-  // ================================================================
+  /**
+   * Fill a single identity profile match
+   */
+  function fillSingleIdentityMatch(match, formData) {
+    chrome.runtime.sendMessage({
+      type: 'DECRYPT_ITEM',
+      payload: { id: match.id }
+    }).then(response => {
+      if (!response || !response.success || !response.item) {
+        showAmpassToast('Could not decrypt this item', 'error');
+        return;
+      }
+
+      const item = response.item;
+      let filled = false;
+      if (window.__ampassPerformIdentityAutofill) {
+        window.__ampassPerformIdentityAutofill(item);
+        filled = true;
+      } else if (window.__ampassAutofillIdentity) {
+        window.__ampassAutofillIdentity(item, formData);
+        filled = true;
+      }
+
+      if (filled) {
+        showAmpassToast('Identity filled by AMPass', 'success');
+        chrome.runtime.sendMessage({
+          type: 'LOG_USAGE',
+          payload: { item_id: match.id, action: 'autofilled', client_type: 'extension' }
+        }).catch(() => {});
+      } else {
+        showAmpassToast('Autofill script not loaded', 'error');
+      }
+    }).catch(() => {
+      showAmpassToast('Could not decrypt this item', 'error');
+    });
+  }
 
   /**
-   * Show a credential selection dropdown near the icon.
+   * Render unified dropdown for logins, identities, password generation, and toggles
    */
-  function showCredentialDropdown(icon, matches, formData) {
+  function showUnifiedDropdown(icon, loginMatches, identities, formData) {
     removeAmpassDropdown();
 
     const dropdown = document.createElement('div');
@@ -671,36 +571,182 @@
     dropdown.style.cssText = `
       position: fixed; z-index: 2147483647;
       background: #18181b; border: 1px solid #27272a; border-radius: 10px;
-      padding: 6px 0; min-width: 260px; max-width: 340px; max-height: 280px; overflow-y: auto;
+      padding: 6px 0; min-width: 260px; max-width: 340px; max-height: 320px; overflow-y: auto;
       box-shadow: 0 12px 40px rgba(0,0,0,0.5);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: #fafafa; font-size: 13px;
     `;
 
-    // Header
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:8px 14px 6px;font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:0.5px;';
-    header.textContent = 'Choose login (' + matches.length + ')';
-    dropdown.appendChild(header);
+    const headerStyle = 'padding: 8px 14px 4px; font-size: 10px; font-weight: 600; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px;';
+    const itemStyle = 'padding: 8px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; transition: background 0.15s;';
+    const actionItemStyle = 'padding: 8px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.15s; color: #fafafa; font-weight: 500;';
+    const dividerStyle = 'height: 1px; background: #27272a; margin: 4px 0;';
 
-    // Items
-    matches.forEach(match => {
-      const item = document.createElement('div');
-      item.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;flex-direction:column;gap:1px;transition:background 0.15s;';
-      item.innerHTML = `
-        <span style="font-weight:500;color:#fafafa;font-size:13px;">${escHtml(match.title || 'Untitled')}</span>
-        <span style="font-size:11px;color:#a1a1aa;">${escHtml(match.username || '')}</span>
-      `;
-      item.addEventListener('mouseenter', () => item.style.background = '#27272a');
-      item.addEventListener('mouseleave', () => item.style.background = 'transparent');
-      item.addEventListener('click', (e) => {
+    let hasContent = false;
+
+    // 1. Logins Section
+    if (loginMatches.length > 0) {
+      hasContent = true;
+      const header = document.createElement('div');
+      header.style.cssText = headerStyle;
+      header.textContent = 'Matching Logins';
+      dropdown.appendChild(header);
+
+      loginMatches.forEach(match => {
+        const item = document.createElement('div');
+        item.style.cssText = itemStyle;
+        item.innerHTML = `
+          <span style="font-weight:500;color:#fafafa;font-size:13px;">🔑 ${escHtml(match.title || 'Untitled')}</span>
+          <span style="font-size:11px;color:#a1a1aa;">${escHtml(match.username || '')}</span>
+        `;
+        item.addEventListener('mouseenter', () => item.style.background = '#27272a');
+        item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          removeAmpassDropdown();
+          fillSingleMatch(match, formData);
+        });
+        dropdown.appendChild(item);
+      });
+    }
+
+    // 2. Identities Section
+    if (identities.length > 0) {
+      if (hasContent) {
+        const divider = document.createElement('div');
+        divider.style.cssText = dividerStyle;
+        dropdown.appendChild(divider);
+      }
+      hasContent = true;
+
+      const header = document.createElement('div');
+      header.style.cssText = headerStyle;
+      header.textContent = 'Identities';
+      dropdown.appendChild(header);
+
+      identities.forEach(match => {
+        const item = document.createElement('div');
+        item.style.cssText = itemStyle;
+        item.innerHTML = `
+          <span style="font-weight:500;color:#fafafa;font-size:13px;">🪪 ${escHtml(match.title || 'Untitled')}</span>
+          <span style="font-size:11px;color:#a1a1aa;">${escHtml(match.name || match.email || '')}</span>
+        `;
+        item.addEventListener('mouseenter', () => item.style.background = '#27272a');
+        item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          removeAmpassDropdown();
+          fillSingleIdentityMatch(match, formData);
+        });
+        dropdown.appendChild(item);
+      });
+    }
+
+    // 3. Tools Section
+    const activeField = document.activeElement;
+    const formElement = (formData && formData.form) || (activeField && activeField.closest('form')) || document.body;
+    const passwordFields = getPasswordFieldsInForm(formElement);
+
+    if (passwordFields.length > 0 || hasContent) {
+      const divider = document.createElement('div');
+      divider.style.cssText = dividerStyle;
+      dropdown.appendChild(divider);
+    }
+
+    const toolsHeader = document.createElement('div');
+    toolsHeader.style.cssText = headerStyle;
+    toolsHeader.textContent = 'Tools';
+    dropdown.appendChild(toolsHeader);
+
+    // Password Generator Option
+    if (passwordFields.length > 0) {
+      const genItem = document.createElement('div');
+      genItem.style.cssText = actionItemStyle;
+      genItem.innerHTML = `<span>✨</span><span>Generate Password</span>`;
+      genItem.addEventListener('mouseenter', () => genItem.style.background = '#27272a');
+      genItem.addEventListener('mouseleave', () => genItem.style.background = 'transparent');
+      genItem.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         removeAmpassDropdown();
-        fillSingleMatch(match, formData);
+        
+        // Generate secure password via service worker
+        chrome.runtime.sendMessage({
+          type: 'GENERATE_PASSWORD',
+          payload: { length: 16 }
+        }).then(response => {
+          if (response && response.success && response.password) {
+            const password = response.password;
+            
+            // Fill all password fields in the form
+            passwordFields.forEach(f => {
+              if (window.__ampassFillField) {
+                window.__ampassFillField(f, password);
+              } else {
+                f.value = password;
+                f.dispatchEvent(new Event('input', { bubbles: true }));
+                f.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              f.setAttribute('data-ampass-filled', 'true');
+            });
+
+            // Reveal/show password so user can see it
+            passwordFields.forEach(f => {
+              f.type = 'text';
+              f.setAttribute('data-ampass-original-type', 'password');
+            });
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(password).catch(() => {});
+            showAmpassToast('Password generated and copied to clipboard!', 'success');
+          }
+        }).catch(() => {
+          showAmpassToast('Failed to generate password', 'error');
+        });
       });
-      dropdown.appendChild(item);
+      dropdown.appendChild(genItem);
+
+      // Show/Hide passwords toggle option
+      const isShowing = passwordFields[0].type === 'text';
+      const toggleItem = document.createElement('div');
+      toggleItem.style.cssText = actionItemStyle;
+      toggleItem.innerHTML = isShowing 
+        ? `<span>🙈</span><span>Hide Passwords</span>` 
+        : `<span>👁️</span><span>Show Passwords</span>`;
+      toggleItem.addEventListener('mouseenter', () => toggleItem.style.background = '#27272a');
+      toggleItem.addEventListener('mouseleave', () => toggleItem.style.background = 'transparent');
+      toggleItem.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeAmpassDropdown();
+        
+        const newStateShowing = togglePasswordsVisibility(formElement);
+        showAmpassToast(newStateShowing ? 'Passwords visible' : 'Passwords hidden', 'info');
+      });
+      dropdown.appendChild(toggleItem);
+    }
+
+    // Open AMPass Option
+    const openItem = document.createElement('div');
+    openItem.style.cssText = actionItemStyle;
+    openItem.innerHTML = `<span>⚙️</span><span>Open AMPass</span>`;
+    openItem.addEventListener('mouseenter', () => openItem.style.background = '#27272a');
+    openItem.addEventListener('mouseleave', () => openItem.style.background = 'transparent');
+    openItem.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removeAmpassDropdown();
+      chrome.runtime.sendMessage({ type: 'OPEN_DESKTOP_UNLOCK', payload: { pageHost: window.location.hostname } }).then(response => {
+        if (!response || !response.success) {
+          showAmpassToast('Click the extension icon to open AMPass.', 'info');
+        }
+      }).catch(() => {
+        showAmpassToast('Click the extension icon to open AMPass.', 'info');
+      });
     });
+    dropdown.appendChild(openItem);
 
     document.body.appendChild(dropdown);
 

@@ -287,6 +287,8 @@
     });
   }
 
-  // Expose sequential filler for form-detector
+  // Expose sequential filler, identity autofill, and single field filler for form-detector
   window.__ampassFillSequential = fillFieldsSequentially;
+  window.__ampassPerformIdentityAutofill = performIdentityAutofill;
+  window.__ampassFillField = fillField;
 })();
