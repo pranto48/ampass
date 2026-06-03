@@ -88,19 +88,29 @@ class LoginController {
             $requireNewDevice = (int) ($user['two_factor_new_device'] ?? 0) === 1;
             $requireFailedLogins = (int) ($user['two_factor_failed_logins'] ?? 0) === 1;
             
-            if ($requireNewDevice && !$isTrusted) {
-                $require2FA = true;
-            }
-            if ($requireFailedLogins) {
-                // Count failed logins for this user in the last 24 hours
-                $failedAttempts = AuditLog::countRecentFailedLogins($user['username'], $user['email']);
-                if ($failedAttempts >= 10) {
+            if ($isTrusted) {
+                // If the device is trusted, we only require 2FA if failed logins threshold is met
+                if ($requireFailedLogins) {
+                    $failedAttempts = AuditLog::countRecentFailedLogins($user['username'], $user['email']);
+                    if ($failedAttempts >= 10) {
+                        $require2FA = true;
+                    }
+                }
+            } else {
+                // Device is not trusted. If 2FA is enabled, we require it unless only failed logins trigger is set and not met
+                if ($requireNewDevice) {
                     $require2FA = true;
                 }
-            }
-            if (!$requireNewDevice && !$requireFailedLogins) {
-                // If 2FA is enabled but neither sub-option is turned on, 2FA is always required
-                $require2FA = true;
+                if ($requireFailedLogins) {
+                    $failedAttempts = AuditLog::countRecentFailedLogins($user['username'], $user['email']);
+                    if ($failedAttempts >= 10) {
+                        $require2FA = true;
+                    }
+                }
+                if (!$requireNewDevice && !$requireFailedLogins) {
+                    // Always require if no sub-options are set
+                    $require2FA = true;
+                }
             }
         }
 
@@ -294,16 +304,70 @@ class LoginController {
         
         $hash = hash('sha256', $token);
         $device = Database::fetchOne(
-            "SELECT id FROM devices WHERE user_id = ? AND device_hash = ? AND is_trusted = 1",
+            "SELECT id, ip_address, browser, os, last_seen_at, is_trusted FROM devices WHERE user_id = ? AND device_hash = ? AND is_trusted = 1",
             [$userId, $hash]
         );
-        return $device !== null;
+        if (!$device) {
+            return false;
+        }
+
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+        // 1. Bot / Hacker User Agent detection
+        $botPatterns = '/bot|crawler|spider|wget|curl|python|selenium|playwright|headless|puppeteer|phantomjs|postman/i';
+        if (preg_match($botPatterns, $ua)) {
+            return false;
+        }
+
+        // Extract OS/browser info from current UA to compare with stored profile
+        $os = 'Unknown OS';
+        if (preg_match('/Windows/i', $ua)) $os = 'Windows';
+        elseif (preg_match('/Macintosh|Mac OS X/i', $ua)) $os = 'macOS';
+        elseif (preg_match('/Linux/i', $ua)) $os = 'Linux';
+        elseif (preg_match('/Android/i', $ua)) $os = 'Android';
+        elseif (preg_match('/iPhone|iPad/i', $ua)) $os = 'iOS';
+        
+        $browser = 'Unknown Browser';
+        if (preg_match('/Chrome/i', $ua)) $browser = 'Chrome';
+        elseif (preg_match('/Safari/i', $ua)) $browser = 'Safari';
+        elseif (preg_match('/Firefox/i', $ua)) $browser = 'Firefox';
+        elseif (preg_match('/Edge/i', $ua)) $browser = 'Edge';
+
+        if ($device['browser'] !== $browser || $device['os'] !== $os) {
+            return false;
+        }
+
+        // 2. IP Address Change Check (Risk Indicator)
+        $currentIp = Security::getClientIP();
+        if ($device['ip_address'] !== $currentIp) {
+            return false;
+        }
+
+        // 3. Inactivity (Offline) Check: 14 days
+        $lastSeen = strtotime($device['last_seen_at']);
+        if (time() - $lastSeen > 14 * 86400) {
+            return false;
+        }
+
+        // All checks passed: Update last_seen_at and ip_address
+        Database::execute(
+            "UPDATE devices SET last_seen_at = NOW(), ip_address = ? WHERE id = ?",
+            [$currentIp, $device['id']]
+        );
+
+        return true;
     }
 
     private static function trustCurrentDevice(int $userId): void {
         $token = Security::generateToken();
         $hash = hash('sha256', $token);
         
+        // Clean up expired trusted devices (older than 30 days) to prevent database accumulation
+        Database::execute(
+            "DELETE FROM devices WHERE user_id = ? AND last_seen_at < DATE_SUB(NOW(), INTERVAL 30 DAY)",
+            [$userId]
+        );
+
         // Set cookie for 30 days
         setcookie('ampass_device_trust', $token, [
             'expires' => time() + 30 * 86400,
