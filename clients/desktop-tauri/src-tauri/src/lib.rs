@@ -279,7 +279,35 @@ async fn launch_application(path: String) -> Result<(), String> {
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        if !path_obj.exists() {
+            return Err(format!("File not found: {}", path));
+        }
+        if path.ends_with(".app") || path_obj.is_dir() {
+            Command::new("open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to launch .app bundle: {}", e))?;
+        } else {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = std::fs::metadata(&path)
+                .map_err(|e| format!("Cannot read file: {}", e))?;
+            if metadata.permissions().mode() & 0o111 == 0 {
+                Command::new("open")
+                    .arg(&path)
+                    .spawn()
+                    .map_err(|e| format!("Failed to open file: {}", e))?;
+            } else {
+                Command::new(&path)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch: {}", e))?;
+            }
+        }
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         use std::process::Command;
         if !path_obj.exists() {
@@ -320,7 +348,16 @@ async fn open_file_location(path: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to open location: {}", e))?;
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to open location: {}", e))?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let parent = std::path::Path::new(&path).parent()
             .map(|p| p.to_string_lossy().to_string())
@@ -402,7 +439,33 @@ async fn open_rdp_connection(host: String, port: u16, username: String, redirect
             .map_err(|e| format!("Failed to launch mstsc: {}", e))?;
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let rdp_uri = if username.is_empty() {
+            format!("rdp://full%20address=s:{}:{}", host, port)
+        } else {
+            format!("rdp://full%20address=s:{}:{}&username=s:{}", host, port, username)
+        };
+        let result = Command::new("open")
+            .arg(&rdp_uri)
+            .spawn();
+        if result.is_err() {
+            let result_x = Command::new("xfreerdp")
+                .arg(format!("/v:{}:{}", host, port))
+                .arg(format!("/u:{}", username))
+                .arg("/cert:ignore")
+                .spawn();
+            if result_x.is_err() {
+                Command::new("rdesktop")
+                    .arg(format!("{}:{}", host, port))
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch RDP client: {}", e))?;
+            }
+        }
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         // On Linux, try xfreerdp or rdesktop
         use std::process::Command;
@@ -489,7 +552,36 @@ async fn list_installed_apps() -> Result<Vec<serde_json::Value>, String> {
         apps.truncate(200);
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        let macos_dirs = vec![
+            "/Applications".to_string(),
+            "/System/Applications".to_string(),
+            format!("{}/Applications", std::env::var("HOME").unwrap_or_default()),
+        ];
+        for dir in &macos_dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "app").unwrap_or(false) {
+                        let name = path.file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        if !name.is_empty() {
+                            apps.push(serde_json::json!({
+                                "name": name,
+                                "path": path.to_string_lossy().to_string(),
+                                "source": "macos_applications"
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+        apps.truncate(200);
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         // On Linux, scan .desktop files
         let desktop_dirs = vec![
