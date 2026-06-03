@@ -12,7 +12,7 @@ class Security {
      */
     public static function setHeaders(): void {
         // Content Security Policy - strict policy
-        header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+        header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
         header("X-Content-Type-Options: nosniff");
         header("X-Frame-Options: DENY");
         header("X-XSS-Protection: 1; mode=block");

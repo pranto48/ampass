@@ -67,6 +67,7 @@
       'input[name*="login"]',
       'input[id*="user"]',
       'input[id*="email"]',
+      'input:not([type])',
       'input[type="text"]'
     ];
 

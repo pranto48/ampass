@@ -21,13 +21,7 @@
 
     if (preferredFormData && preferredFormData.passwordField) {
       // Use the specific form fields provided
-      if (preferredFormData.usernameField && username) {
-        fillField(preferredFormData.usernameField, username);
-      }
-      if (preferredFormData.passwordField && password) {
-        fillField(preferredFormData.passwordField, password);
-        preferredFormData.passwordField.setAttribute('data-ampass-filled', 'true');
-      }
+      fillFieldsSequentially(preferredFormData.usernameField, username, preferredFormData.passwordField, password);
     } else {
       // Fallback: auto-detect fields
       performAutofill(payload);
@@ -84,25 +78,13 @@
       if (!pwField) return;
 
       const form = pwField.closest('form') || document.body;
-      const usernameField = form.querySelector('input[type="email"], input[type="text"], input[autocomplete="username"]');
+      const usernameField = form.querySelector('input[type="email"], input[type="text"], input:not([type]), input[autocomplete="username"]');
 
-      if (usernameField && username) {
-        fillField(usernameField, username);
-      }
-      if (pwField && password) {
-        fillField(pwField, password);
-        pwField.setAttribute('data-ampass-filled', 'true');
-      }
+      fillFieldsSequentially(usernameField, username, pwField, password);
     } else {
       // Use detected form data
       const formData = forms[0]; // Fill first detected form
-      if (formData.usernameField && username) {
-        fillField(formData.usernameField, username);
-      }
-      if (formData.passwordField && password) {
-        fillField(formData.passwordField, password);
-        formData.passwordField.setAttribute('data-ampass-filled', 'true');
-      }
+      fillFieldsSequentially(formData.usernameField, username, formData.passwordField, password);
     }
 
     // Clear sensitive data from local scope

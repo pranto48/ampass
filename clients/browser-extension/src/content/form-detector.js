@@ -32,7 +32,7 @@
 
     // Look for common username field patterns
     const candidates = Array.from(container.querySelectorAll(
-      'input[type="text"], input[type="email"], input[name*="user"], input[name*="login"], input[name*="email"], input[autocomplete="username"], input[autocomplete="email"]'
+      'input[type="text"], input[type="email"], input:not([type]), input[name*="user"], input[name*="login"], input[name*="email"], input[autocomplete="username"], input[autocomplete="email"]'
     )).filter(el => isVisible(el) && !isHidden(el));
 
     // Find the closest one above the password field in DOM order
