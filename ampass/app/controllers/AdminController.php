@@ -679,9 +679,9 @@ class AdminController {
 
         $data = [
             'current_version' => UpdateService::getInstalledVersion(),
-            'installed_sha' => UpdateService::getSetting('installed_commit_sha', ''),
-            'installed_version_display' => UpdateService::getSetting('installed_version_display', defined('AMPASS_VERSION_DISPLAY') ? AMPASS_VERSION_DISPLAY : ''),
-            'installed_commit_count' => UpdateService::getSetting('installed_commit_count', defined('AMPASS_COMMIT_COUNT') ? (string)AMPASS_COMMIT_COUNT : ''),
+            'installed_sha' => defined('AMPASS_COMMIT_SHA') ? AMPASS_COMMIT_SHA : UpdateService::getSetting('installed_commit_sha', ''),
+            'installed_version_display' => defined('AMPASS_VERSION_DISPLAY') ? AMPASS_VERSION_DISPLAY : UpdateService::getSetting('installed_version_display', ''),
+            'installed_commit_count' => defined('AMPASS_COMMIT_COUNT') ? (string)AMPASS_COMMIT_COUNT : UpdateService::getSetting('installed_commit_count', ''),
             'latest_version' => UpdateService::getSetting('latest_version', ''),
             'latest_sha' => UpdateService::getSetting('latest_commit_sha', ''),
             'latest_version_display' => UpdateService::getSetting('latest_version_display', ''),

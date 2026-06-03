@@ -64,6 +64,8 @@ class UpdateService {
                 if ($release) {
                     $latestVersion = ltrim($release['tag_name'] ?? '', 'v');
                     $result['latest_version'] = $latestVersion;
+                    $result['latest_version_display'] = $release['tag_name'] ?? ('v' . $latestVersion);
+                    $result['latest_commit_count'] = '';
                     $result['latest_commit_sha'] = $release['target_commitish'] ?? '';
                     $result['release_notes'] = $release['body'] ?? '';
                     $result['download_url'] = $release['zipball_url'] ?? '';
@@ -80,20 +82,18 @@ class UpdateService {
                     $result['warning'] = 'No GitHub release found for ' . $owner . '/' . $repo . '. Switch to "Latest Branch ZIP" mode for development updates, or create a GitHub release.';
                 }
             } else {
-                // Branch ZIP mode — compare commit SHAs
-                $commit = self::fetchLatestCommit($owner, $repo, $branch, $token);
-                if ($commit) {
-                    $result['latest_commit_sha'] = $commit['sha'] ?? '';
-                    $result['latest_version'] = $result['current_version'];
-                    $result['commit_message'] = substr($commit['commit']['message'] ?? '', 0, 200);
+                // Branch ZIP mode — compare commit SHAs using syncLatestVersionFromGitHub
+                $sync = self::syncLatestVersionFromGitHub();
+                if ($sync['success']) {
+                    $result['latest_commit_sha'] = $sync['sha'];
+                    $result['latest_version'] = $sync['semver'];
+                    $result['latest_version_display'] = $sync['display'];
+                    $result['latest_commit_count'] = (string)$sync['commit_count'];
+                    $result['commit_message'] = self::getSetting('latest_commit_message', '');
                     $result['download_url'] = "https://github.com/{$owner}/{$repo}/archive/refs/heads/{$branch}.zip";
-
-                    $installedSha = self::getSetting('installed_commit_sha', '');
-                    // Update available if: latest SHA exists AND (installed SHA is empty OR different)
-                    $result['update_available'] = !empty($result['latest_commit_sha']) &&
-                        (empty($installedSha) || $result['latest_commit_sha'] !== $installedSha);
+                    $result['update_available'] = $sync['update_available'];
                 } else {
-                    $result['error'] = "Could not fetch latest commit for branch '{$branch}'. Check repo settings and token.";
+                    $result['error'] = $sync['error'] ?? "Could not fetch latest commit for branch '{$branch}'. Check repo settings and token.";
                 }
             }
         } catch (\Exception $e) {
@@ -103,6 +103,8 @@ class UpdateService {
         // Save state
         self::saveSetting('last_update_check_at', date('c'));
         self::saveSetting('latest_version', $result['latest_version'] ?? '');
+        self::saveSetting('latest_version_display', $result['latest_version_display'] ?? '');
+        self::saveSetting('latest_commit_count', $result['latest_commit_count'] ?? '');
         self::saveSetting('latest_commit_sha', $result['latest_commit_sha'] ?? '');
         self::saveSetting('latest_commit_message', $result['commit_message'] ?? '');
         self::saveSetting('latest_download_url', $result['download_url'] ?? '');
