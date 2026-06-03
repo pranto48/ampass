@@ -38,8 +38,17 @@ const Api = {
     return data;
   },
 
-  async login(username, password, deviceName) {
-    return this.request('login', { body: { username, password, device_name: deviceName, browser_name: 'AMPass Desktop' } });
+  async login(username, password, deviceName, deviceId = null, twoFactorCode = '') {
+    return this.request('login', { 
+      body: { 
+        username, 
+        password, 
+        device_name: deviceName, 
+        browser_name: 'AMPass Desktop',
+        device_id: deviceId,
+        two_factor_code: twoFactorCode
+      } 
+    });
   },
   async logout() { return this.request('logout', { method: 'POST', body: {} }); },
   async listVault() { return this.request('vault/list'); },

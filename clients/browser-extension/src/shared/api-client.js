@@ -68,9 +68,16 @@ const ApiClient = {
     return await this.request('status');
   },
 
-  async login(username, password, deviceName, browserName) {
+  async login(username, password, deviceName, browserName, deviceId = null, twoFactorCode = '') {
     return await this.request('login', {
-      body: { username, password, device_name: deviceName, browser_name: browserName }
+      body: { 
+        username, 
+        password, 
+        device_name: deviceName, 
+        browser_name: browserName,
+        device_id: deviceId,
+        two_factor_code: twoFactorCode
+      }
     });
   },
 

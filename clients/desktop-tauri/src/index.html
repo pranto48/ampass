@@ -37,6 +37,10 @@
           <label class="field-label">Password</label>
           <input type="password" id="loginPass" class="field-input" autocomplete="off">
           <label class="checkbox-label" style="margin:8px 0;font-size:12px;"><input type="checkbox" id="loginTrustPC" checked> Trust this PC (stay signed in)</label>
+          <div id="login2faContainer" style="display:none; margin-top:8px; margin-bottom:8px;">
+            <label class="field-label">2FA Code</label>
+            <input type="text" id="login2faCode" class="field-input" placeholder="Google Authenticator code" maxlength="6" inputmode="numeric" pattern="[0-9]*">
+          </div>
           <button id="btnLogin" class="btn-primary">Sign In</button>
           <div id="loginErr" class="field-error"></div>
           <button id="btnLoginChangeServer" class="btn-ghost-sm" style="margin-top:8px;font-size:11px;width:100%;">Change Server</button>
@@ -219,7 +223,7 @@
               <div class="setting-group"><h3>Account</h3>
                 <button id="btnLogout" class="btn-ghost">Logout & Disconnect</button>
               </div>
-              <div class="setting-group"><h3>About</h3><p class="setting-val">AMPass Desktop v1.0.0<br>⚠️ Not professionally audited.</p></div>
+              <div class="setting-group"><h3>About</h3><p class="setting-val">AMPass Desktop <span id="aboutVersion">v1.107.0</span><br>⚠️ Not professionally audited.</p></div>
             </div>
           </div>
 

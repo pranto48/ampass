@@ -183,10 +183,35 @@ pub fn process_message(
         }
 
         "get_status" => {
-            NativeResponse::ok("status", serde_json::json!({
+            let mut status_data = serde_json::json!({
                 "vault_locked": vault_locked,
                 "version": env!("CARGO_PKG_VERSION")
-            }), rid)
+            });
+            
+            if !vault_locked {
+                if let Some(ref key) = vault_key {
+                    status_data["unlocked"] = serde_json::json!(true);
+                    if let Ok(Some(url)) = crate::storage::load_config("server_url") {
+                        status_data["server_url"] = serde_json::json!(url);
+                    }
+                    if let Ok(Some(token)) = crate::keychain::retrieve_token() {
+                        status_data["auth_token"] = serde_json::json!(token);
+                    }
+                    if let Ok(Some(params)) = crate::storage::load_secure_config("derivation_params") {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&params) {
+                            status_data["derivation_params"] = parsed;
+                        }
+                    }
+                    if let Ok(Some(summary)) = crate::storage::load_secure_config("user_summary") {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&summary) {
+                            status_data["user"] = parsed;
+                        }
+                    }
+                    status_data["vault_key"] = serde_json::json!(key);
+                }
+            }
+            
+            NativeResponse::ok("status", status_data, rid)
         }
 
         "lock" => {

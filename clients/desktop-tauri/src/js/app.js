@@ -113,6 +113,14 @@
       return;
     }
     try {
+      // Load and display version
+      try {
+        const appVer = await invoke('get_app_version');
+        const aboutEl = document.getElementById('aboutVersion');
+        if (aboutEl) aboutEl.textContent = 'V' + appVer;
+      } catch (verErr) {
+        console.warn("Failed to retrieve version:", verErr);
+      }
       const state = await invoke('get_app_state');
       if (!state.configured) { showAuth('viewWelcome'); return; }
       Api.setServerUrl(state.server_url);
@@ -188,7 +196,17 @@
     if (!user || !pass) return;
     document.getElementById('loginErr').textContent = '';
     try {
-      const result = await Api.login(user, pass, 'AMPass Desktop on Windows');
+      const deviceId = localStorage.getItem('deviceId');
+      const twoFactorCode = document.getElementById('login2faCode')?.value.trim() || '';
+      const result = await Api.login(user, pass, 'AMPass Desktop on macOS', deviceId, twoFactorCode);
+      
+      if (result.device_id) {
+        localStorage.setItem('deviceId', result.device_id);
+      }
+      
+      document.getElementById('login2faContainer').style.display = 'none';
+      document.getElementById('login2faCode').value = '';
+      
       Api.token = result.token;
       await invoke('store_auth_token', { token: result.token });
       derivationParams = result.derivation_params;
@@ -201,11 +219,18 @@
       document.getElementById('loginPass').value = '';
       showAuth('viewUnlock');
     } catch (e) {
-      document.getElementById('loginErr').textContent = e.message;
+      if (e.code === 'TWO_FACTOR_REQUIRED') {
+        document.getElementById('login2faContainer').style.display = 'block';
+        document.getElementById('login2faCode').focus();
+        document.getElementById('loginErr').textContent = '2FA code required. Please enter your authenticator code.';
+      } else {
+        document.getElementById('loginErr').textContent = e.message;
+      }
       document.getElementById('loginPass').value = '';
     }
   });
   document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnLogin').click(); });
+  document.getElementById('login2faCode').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnLogin').click(); });
 
   // Login: Change Server button
   document.getElementById('btnLoginChangeServer').addEventListener('click', () => {
@@ -549,17 +574,207 @@
   }
   window.openRdp = openRdp;
 
+  async function openUrl(url) {
+    try {
+      await invoke('open_url', { url });
+    } catch (e) {
+      toast('Failed to open link: ' + e.message);
+    }
+  }
+  window.openUrl = openUrl;
+
+  function toggleDetailPass() {
+    const el = document.getElementById('detailPassVal');
+    if (el) {
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+  }
+  window.toggleDetailPass = toggleDetailPass;
+
   function showItemDetail(id) {
     const item = allDecrypted.find(i => i._id === id);
     if (!item) return;
     document.getElementById('modalTitle').textContent = item.title || 'Item Details';
-    let html = '';
-    if (item.url) html += `<div class="field-label">URL</div><div class="field-input" style="margin-bottom:8px;">${esc(item.url)}</div>`;
-    if (item.username) html += `<div class="field-label">Username</div><div class="field-input" style="margin-bottom:8px;">${esc(item.username)}</div>`;
-    if (item.password) html += `<div class="field-label">Password</div><div class="field-input" style="margin-bottom:8px;">••••••••</div>`;
-    if (item.notes) html += `<div class="field-label">Notes</div><div class="field-input" style="margin-bottom:8px;white-space:pre-wrap;">${esc(item.notes)}</div>`;
-    document.getElementById('modalBody').innerHTML = html || '<p class="empty-hint">No details</p>';
-    document.getElementById('modalFooter').innerHTML = `<button class="btn-ghost-sm" onclick="document.getElementById('itemModal').style.display='none'">Close</button>`;
+    let html = '<div class="auth-form">';
+    const type = item._type || 'login';
+
+    if (type === 'login') {
+      if (item.url) {
+        html += `
+          <div class="field-label">URL</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.url)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="openUrl('${esc(item.url)}')" style="padding:6px 10px;" title="Open Link">🔗</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'url')" style="padding:6px 10px;" title="Copy URL">📋</button>
+          </div>
+        `;
+      }
+      if (item.username) {
+        html += `
+          <div class="field-label">Username</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.username)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'username')" style="padding:6px 10px;" title="Copy Username">📋</button>
+          </div>
+        `;
+      }
+      if (item.password) {
+        html += `
+          <div class="field-label">Password</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="password" class="field-input" id="detailPassVal" value="${esc(item.password)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="toggleDetailPass()" style="padding:6px 10px;" title="Toggle Password">👁️</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'password')" style="padding:6px 10px;" title="Copy Password">📋</button>
+          </div>
+        `;
+      }
+      if (item.totp_secret) {
+        html += `
+          <div class="field-label">TOTP Secret</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.totp_secret)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'totp_secret')" style="padding:6px 10px;" title="Copy TOTP Secret">📋</button>
+          </div>
+        `;
+      }
+    } else if (type === 'identity') {
+      const fieldMap = {
+        first_name: 'First Name',
+        last_name: 'Last Name',
+        email: 'Email',
+        phone: 'Phone',
+        company: 'Company',
+        address_line1: 'Address Line 1',
+        address_line2: 'Address Line 2',
+        city: 'City',
+        state: 'State / Region',
+        postcode: 'Post Code',
+        country: 'Country',
+        date_of_birth: 'Date of Birth'
+      };
+      for (const [key, label] of Object.entries(fieldMap)) {
+        if (item[key]) {
+          html += `
+            <div class="field-label">${label}</div>
+            <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+              <input type="text" class="field-input" value="${esc(item[key])}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+              <button class="btn-ghost-sm" onclick="copyField(${item._id}, '${key}')" style="padding:6px 10px;" title="Copy ${label}">📋</button>
+            </div>
+          `;
+        }
+      }
+    } else if (type === 'app_account') {
+      if (item.application_name) html += `<div class="field-label">Application Name</div><div class="field-input" style="margin-bottom:8px;">${esc(item.application_name)}</div>`;
+      if (item.executable_path) {
+        html += `
+          <div class="field-label">Executable Path</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.executable_path)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="launchApp(${item._id})" style="padding:6px 10px;" title="Launch App">🚀</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'executable_path')" style="padding:6px 10px;" title="Copy Path">📋</button>
+          </div>
+        `;
+      }
+      if (item.username) {
+        html += `
+          <div class="field-label">Username</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.username)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'username')" style="padding:6px 10px;" title="Copy Username">📋</button>
+          </div>
+        `;
+      }
+      if (item.password) {
+        html += `
+          <div class="field-label">Password</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="password" class="field-input" id="detailPassVal" value="${esc(item.password)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="toggleDetailPass()" style="padding:6px 10px;" title="Toggle Password">👁️</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'password')" style="padding:6px 10px;" title="Copy Password">📋</button>
+          </div>
+        `;
+      }
+      if (item.website) {
+        html += `
+          <div class="field-label">Website</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.website)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="openUrl('${esc(item.website)}')" style="padding:6px 10px;" title="Open Link">🔗</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'website')" style="padding:6px 10px;" title="Copy Website">📋</button>
+          </div>
+        `;
+      }
+    } else if (type === 'remote_desktop') {
+      if (item.host) {
+        html += `
+          <div class="field-label">Host / IP</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.host)}:${item.port || 3389}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="openRdp(${item._id})" style="padding:6px 10px;" title="Launch RDP">🖥️ Connect</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'host')" style="padding:6px 10px;" title="Copy Host">📋</button>
+          </div>
+        `;
+      }
+      if (item.protocol) html += `<div class="field-label">Protocol</div><div class="field-input" style="margin-bottom:8px;">${esc(item.protocol.toUpperCase())}</div>`;
+      if (item.domain) {
+        html += `
+          <div class="field-label">Domain</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.domain)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'domain')" style="padding:6px 10px;" title="Copy Domain">📋</button>
+          </div>
+        `;
+      }
+      if (item.username) {
+        html += `
+          <div class="field-label">Username</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.username)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'username')" style="padding:6px 10px;" title="Copy Username">📋</button>
+          </div>
+        `;
+      }
+      if (item.password) {
+        html += `
+          <div class="field-label">Password</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="password" class="field-input" id="detailPassVal" value="${esc(item.password)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="toggleDetailPass()" style="padding:6px 10px;" title="Toggle Password">👁️</button>
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'password')" style="padding:6px 10px;" title="Copy Password">📋</button>
+          </div>
+        `;
+      }
+      if (item.gateway) {
+        html += `
+          <div class="field-label">Gateway</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(item.gateway)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="copyField(${item._id}, 'gateway')" style="padding:6px 10px;" title="Copy Gateway">📋</button>
+          </div>
+        `;
+      }
+    }
+
+    if (item.notes) {
+      html += `
+        <div class="field-label">Notes</div>
+        <textarea readonly class="field-input" style="width:100%;height:80px;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;resize:none;margin-bottom:8px;white-space:pre-wrap;">${esc(item.notes)}</textarea>
+      `;
+    }
+
+    html += '</div>';
+    document.getElementById('modalBody').innerHTML = html;
+    
+    document.getElementById('modalFooter').innerHTML = `
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <div style="display:flex; gap:6px;">
+          <button class="btn-ghost-sm" style="color:#6366f1;" onclick="showEditModal(${item._id})">Edit</button>
+          <button class="btn-ghost-sm" style="color:#ef4444;" onclick="deleteItem(${item._id})">Delete</button>
+        </div>
+        <button class="btn-ghost-sm" onclick="document.getElementById('itemModal').style.display='none'">Close</button>
+      </div>
+    `;
+    
     document.getElementById('itemModal').style.display = 'flex';
   }
 
@@ -572,6 +787,7 @@
       html += '<label class="field-label">URL</label><input type="url" id="addUrl" class="field-input">';
       html += '<label class="field-label">Username</label><input type="text" id="addUser" class="field-input">';
       html += '<label class="field-label">Password</label><input type="password" id="addPass" class="field-input">';
+      html += '<label class="field-label">TOTP Secret (optional)</label><input type="text" id="addTotp" class="field-input">';
     } else if (type === 'app_account') {
       html += '<label class="field-label">Application Name</label><input type="text" id="addAppName" class="field-input" placeholder="e.g. Microsoft Outlook">';
       html += '<label class="field-label">Executable Path</label><div style="display:flex;gap:4px;"><input type="text" id="addExePath" class="field-input" placeholder="C:\\Program Files\\...\\app.exe" style="flex:1;"><button class="btn-ghost-sm" id="btnBrowseExe" title="Browse">📂</button></div>';
@@ -586,6 +802,25 @@
       html += '<label class="field-label">Username</label><input type="text" id="addUser" class="field-input">';
       html += '<label class="field-label">Password</label><input type="password" id="addPass" class="field-input">';
       html += '<label class="field-label">Gateway (optional)</label><input type="text" id="addGateway" class="field-input">';
+    } else if (type === 'identity') {
+      html += '<div style="display:flex;gap:8px;">';
+      html += '  <div style="flex:1;"><label class="field-label">First Name</label><input type="text" id="addFirstName" class="field-input"></div>';
+      html += '  <div style="flex:1;"><label class="field-label">Last Name</label><input type="text" id="addLastName" class="field-input"></div>';
+      html += '</div>';
+      html += '<label class="field-label">Email</label><input type="email" id="addEmail" class="field-input">';
+      html += '<label class="field-label">Phone</label><input type="tel" id="addPhone" class="field-input">';
+      html += '<label class="field-label">Company</label><input type="text" id="addCompany" class="field-input">';
+      html += '<label class="field-label">Address Line 1</label><input type="text" id="addAddress1" class="field-input">';
+      html += '<label class="field-label">Address Line 2</label><input type="text" id="addAddress2" class="field-input">';
+      html += '<div style="display:flex;gap:8px;">';
+      html += '  <div style="flex:1;"><label class="field-label">City</label><input type="text" id="addCity" class="field-input"></div>';
+      html += '  <div style="flex:1;"><label class="field-label">State / Region</label><input type="text" id="addState" class="field-input"></div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:8px;">';
+      html += '  <div style="flex:1;"><label class="field-label">Post Code</label><input type="text" id="addPostcode" class="field-input"></div>';
+      html += '  <div style="flex:1;"><label class="field-label">Country</label><input type="text" id="addCountry" class="field-input"></div>';
+      html += '</div>';
+      html += '<label class="field-label">Date of Birth</label><input type="date" id="addDob" class="field-input">';
     }
     html += '<label class="field-label">Notes</label><textarea id="addNotes" class="field-input" rows="3"></textarea>';
     html += '</div>';
@@ -606,6 +841,7 @@
       data.url = document.getElementById('addUrl')?.value || '';
       data.username = document.getElementById('addUser')?.value || '';
       data.password = document.getElementById('addPass')?.value || '';
+      data.totp_secret = document.getElementById('addTotp')?.value || '';
     } else if (type === 'app_account') {
       data.application_name = document.getElementById('addAppName')?.value || data.title;
       data.executable_path = document.getElementById('addExePath')?.value || '';
@@ -620,6 +856,19 @@
       data.username = document.getElementById('addUser')?.value || '';
       data.password = document.getElementById('addPass')?.value || '';
       data.gateway = document.getElementById('addGateway')?.value || '';
+    } else if (type === 'identity') {
+      data.first_name = document.getElementById('addFirstName')?.value || '';
+      data.last_name = document.getElementById('addLastName')?.value || '';
+      data.email = document.getElementById('addEmail')?.value || '';
+      data.phone = document.getElementById('addPhone')?.value || '';
+      data.company = document.getElementById('addCompany')?.value || '';
+      data.address_line1 = document.getElementById('addAddress1')?.value || '';
+      data.address_line2 = document.getElementById('addAddress2')?.value || '';
+      data.city = document.getElementById('addCity')?.value || '';
+      data.state = document.getElementById('addState')?.value || '';
+      data.postcode = document.getElementById('addPostcode')?.value || '';
+      data.country = document.getElementById('addCountry')?.value || '';
+      data.date_of_birth = document.getElementById('addDob')?.value || '';
     }
     if (!data.title) { toast('Title is required'); return; }
     try {
@@ -633,6 +882,140 @@
       await loadVault();
     } catch (e) { toast('Save failed: ' + e.message); }
   }
+
+  function showEditModal(id) {
+    const item = allDecrypted.find(i => i._id === id);
+    if (!item) return;
+    const type = item._type || 'login';
+    const titles = { login: 'Edit Web Account', identity: 'Edit Identity', secure_note: 'Edit Secure Memo', app_account: 'Edit App Account', remote_desktop: 'Edit Remote Desktop' };
+    document.getElementById('modalTitle').textContent = titles[type] || 'Edit Item';
+    
+    let html = '<div class="auth-form">';
+    html += `<label class="field-label">Title</label><input type="text" id="editTitle" class="field-input" value="${esc(item.title || '')}">`;
+    
+    if (type === 'login') {
+      html += `<label class="field-label">URL</label><input type="url" id="editUrl" class="field-input" value="${esc(item.url || '')}">`;
+      html += `<label class="field-label">Username</label><input type="text" id="editUser" class="field-input" value="${esc(item.username || '')}">`;
+      html += `<label class="field-label">Password</label><input type="password" id="editPass" class="field-input" value="${esc(item.password || '')}">`;
+      html += `<label class="field-label">TOTP Secret (optional)</label><input type="text" id="editTotp" class="field-input" value="${esc(item.totp_secret || '')}">`;
+    } else if (type === 'app_account') {
+      html += `<label class="field-label">Application Name</label><input type="text" id="editAppName" class="field-input" value="${esc(item.application_name || '')}">`;
+      html += `<label class="field-label">Executable Path</label><div style="display:flex;gap:4px;"><input type="text" id="editExePath" class="field-input" value="${esc(item.executable_path || '')}" style="flex:1;"><button class="btn-ghost-sm" id="btnBrowseExeEdit" title="Browse">📂</button></div>`;
+      html += `<label class="field-label">Username / Login</label><input type="text" id="editUser" class="field-input" value="${esc(item.username || '')}">`;
+      html += `<label class="field-label">Password</label><input type="password" id="editPass" class="field-input" value="${esc(item.password || '')}">`;
+      html += `<label class="field-label">Website (optional)</label><input type="url" id="editUrl" class="field-input" value="${esc(item.website || '')}">`;
+    } else if (type === 'remote_desktop') {
+      html += `<label class="field-label">Host / IP</label><input type="text" id="editHost" class="field-input" value="${esc(item.host || '')}">`;
+      html += `<label class="field-label">Port</label><input type="number" id="editPort" class="field-input" value="${item.port || 3389}">`;
+      
+      const protocols = ['rdp', 'vnc', 'ssh'];
+      let protocolOptions = '';
+      protocols.forEach(p => {
+        const selected = (item.protocol || 'rdp') === p ? 'selected' : '';
+        protocolOptions += `<option value="${p}" ${selected}>${p.toUpperCase()}</option>`;
+      });
+      html += `<label class="field-label">Protocol</label><select id="editProtocol" class="field-input">${protocolOptions}</select>`;
+      
+      html += `<label class="field-label">Domain (optional)</label><input type="text" id="editDomain" class="field-input" value="${esc(item.domain || '')}">`;
+      html += `<label class="field-label">Username</label><input type="text" id="editUser" class="field-input" value="${esc(item.username || '')}">`;
+      html += `<label class="field-label">Password</label><input type="password" id="editPass" class="field-input" value="${esc(item.password || '')}">`;
+      html += `<label class="field-label">Gateway (optional)</label><input type="text" id="editGateway" class="field-input" value="${esc(item.gateway || '')}">`;
+    } else if (type === 'identity') {
+      html += '<div style="display:flex;gap:8px;">';
+      html += `  <div style="flex:1;"><label class="field-label">First Name</label><input type="text" id="editFirstName" class="field-input" value="${esc(item.first_name || '')}"></div>`;
+      html += `  <div style="flex:1;"><label class="field-label">Last Name</label><input type="text" id="editLastName" class="field-input" value="${esc(item.last_name || '')}"></div>`;
+      html += '</div>';
+      html += `<label class="field-label">Email</label><input type="email" id="editEmail" class="field-input" value="${esc(item.email || '')}">`;
+      html += `<label class="field-label">Phone</label><input type="tel" id="editPhone" class="field-input" value="${esc(item.phone || '')}">`;
+      html += `<label class="field-label">Company</label><input type="text" id="editCompany" class="field-input" value="${esc(item.company || '')}">`;
+      html += `<label class="field-label">Address Line 1</label><input type="text" id="editAddress1" class="field-input" value="${esc(item.address_line1 || '')}">`;
+      html += `<label class="field-label">Address Line 2</label><input type="text" id="editAddress2" class="field-input" value="${esc(item.address_line2 || '')}">`;
+      html += '<div style="display:flex;gap:8px;">';
+      html += `  <div style="flex:1;"><label class="field-label">City</label><input type="text" id="editCity" class="field-input" value="${esc(item.city || '')}"></div>`;
+      html += `  <div style="flex:1;"><label class="field-label">State / Region</label><input type="text" id="editState" class="field-input" value="${esc(item.state || '')}"></div>`;
+      html += '</div>';
+      html += '<div style="display:flex;gap:8px;">';
+      html += `  <div style="flex:1;"><label class="field-label">Post Code</label><input type="text" id="editPostcode" class="field-input" value="${esc(item.postcode || '')}"></div>`;
+      html += `  <div style="flex:1;"><label class="field-label">Country</label><input type="text" id="editCountry" class="field-input" value="${esc(item.country || '')}"></div>`;
+      html += '</div>';
+      html += `<label class="field-label">Date of Birth</label><input type="date" id="editDob" class="field-input" value="${item.date_of_birth || ''}">`;
+    }
+    
+    html += `<label class="field-label">Notes</label><textarea id="editNotes" class="field-input" rows="3">${esc(item.notes || '')}</textarea>`;
+    html += '</div>';
+    
+    document.getElementById('modalBody').innerHTML = html;
+    document.getElementById('modalFooter').innerHTML = `<button class="btn-ghost-sm" onclick="showItemDetail(${item._id})">Cancel</button><button class="btn-primary" style="width:auto;margin:0;padding:8px 16px;" id="btnSaveEdit">Save</button>`;
+    document.getElementById('itemModal').style.display = 'flex';
+    
+    document.getElementById('btnSaveEdit').addEventListener('click', () => saveEditItem(id, type));
+    
+    const browseBtn = document.getElementById('btnBrowseExeEdit');
+    if (browseBtn) browseBtn.addEventListener('click', async () => {
+      try { const path = await invoke('pick_executable'); if (path) document.getElementById('editExePath').value = path; } catch {}
+    });
+  }
+  window.showEditModal = showEditModal;
+
+  async function saveEditItem(id, type) {
+    const data = { title: document.getElementById('editTitle')?.value || '', notes: document.getElementById('editNotes')?.value || '' };
+    if (type === 'login') {
+      data.url = document.getElementById('editUrl')?.value || '';
+      data.username = document.getElementById('editUser')?.value || '';
+      data.password = document.getElementById('editPass')?.value || '';
+      data.totp_secret = document.getElementById('editTotp')?.value || '';
+    } else if (type === 'app_account') {
+      data.application_name = document.getElementById('editAppName')?.value || data.title;
+      data.executable_path = document.getElementById('editExePath')?.value || '';
+      data.username = document.getElementById('editUser')?.value || '';
+      data.password = document.getElementById('editPass')?.value || '';
+      data.website = document.getElementById('editUrl')?.value || '';
+    } else if (type === 'remote_desktop') {
+      data.host = document.getElementById('editHost')?.value || '';
+      data.port = parseInt(document.getElementById('editPort')?.value || '3389');
+      data.protocol = document.getElementById('editProtocol')?.value || 'rdp';
+      data.domain = document.getElementById('editDomain')?.value || '';
+      data.username = document.getElementById('editUser')?.value || '';
+      data.password = document.getElementById('editPass')?.value || '';
+      data.gateway = document.getElementById('editGateway')?.value || '';
+    } else if (type === 'identity') {
+      data.first_name = document.getElementById('editFirstName')?.value || '';
+      data.last_name = document.getElementById('editLastName')?.value || '';
+      data.email = document.getElementById('editEmail')?.value || '';
+      data.phone = document.getElementById('editPhone')?.value || '';
+      data.company = document.getElementById('editCompany')?.value || '';
+      data.address_line1 = document.getElementById('editAddress1')?.value || '';
+      data.address_line2 = document.getElementById('editAddress2')?.value || '';
+      data.city = document.getElementById('editCity')?.value || '';
+      data.state = document.getElementById('editState')?.value || '';
+      data.postcode = document.getElementById('editPostcode')?.value || '';
+      data.country = document.getElementById('editCountry')?.value || '';
+      data.date_of_birth = document.getElementById('editDob')?.value || '';
+    }
+    if (!data.title) { toast('Title is required'); return; }
+    try {
+      const encrypted = await Crypto.encryptItem(data, vaultKeyHex);
+      const urlHash = data.url ? await Crypto.computeSearchHash(data.url, searchKey) : null;
+      const titleHash = await Crypto.computeSearchHash(data.title, searchKey);
+      const hostHash = data.host ? await Crypto.computeSearchHash(data.host, searchKey) : null;
+      await Api.updateItem({ id, item_type: type, encrypted_data: encrypted.ciphertext, encryption_iv: encrypted.iv, url_hash: urlHash, title_hash: titleHash, host_hash: hostHash, password_strength: Crypto.strength(data.password || ''), is_weak: Crypto.strength(data.password || '') < 40 ? 1 : 0 });
+      document.getElementById('itemModal').style.display = 'none';
+      toast('Item updated!');
+      await loadVault();
+    } catch (e) { toast('Save failed: ' + e.message); }
+  }
+  window.saveEditItem = saveEditItem;
+
+  async function deleteItem(id) {
+    if (!confirm('Are you sure you want to delete this item?')) return;
+    try {
+      await Api.deleteItem(id);
+      document.getElementById('itemModal').style.display = 'none';
+      toast('Item deleted');
+      await loadVault();
+    } catch (e) { toast('Delete failed: ' + e.message); }
+  }
+  window.deleteItem = deleteItem;
 
   // ===== Navigation =====
   document.getElementById('sidebarNav').addEventListener('click', (e) => {

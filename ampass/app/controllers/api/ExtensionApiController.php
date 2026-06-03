@@ -241,6 +241,8 @@ class ExtensionApiController {
         $deviceName = Security::sanitize(substr($input['device_name'] ?? 'Browser Extension', 0, 100));
         $browserName = Security::sanitize(substr($input['browser_name'] ?? '', 0, 50));
         $extensionId = Security::sanitize(substr($input['extension_id'] ?? '', 0, 128));
+        $deviceIdInput = isset($input['device_id']) ? (int)$input['device_id'] : null;
+        $twoFactorCode = trim($input['two_factor_code'] ?? '');
 
         // Validate input
         if (empty($login) || empty($password)) {
@@ -272,24 +274,83 @@ class ExtensionApiController {
             return;
         }
 
-        // Check max devices
-        $maxDevices = 10;
-        $maxSetting = Database::fetchOne("SELECT setting_value FROM app_settings WHERE setting_key = 'extension_max_devices_per_user'");
-        if ($maxSetting) $maxDevices = (int)$maxSetting['setting_value'];
+        // Check 2FA requirement
+        $isTwoFactorEnabled = (int)($user['two_factor_enabled'] ?? 0) === 1;
+        $device = null;
+        $isTrusted = false;
 
-        if (ExtensionDevice::countByUser($user['id']) >= $maxDevices) {
-            http_response_code(403);
-            echo json_encode(['error' => 'Maximum number of extension devices reached. Revoke an existing device first.', 'code' => 'MAX_DEVICES']);
-            return;
+        if ($isTwoFactorEnabled) {
+            if ($deviceIdInput) {
+                $device = ExtensionDevice::findById($deviceIdInput, $user['id']);
+            }
+            if ($device && $device['revoked_at'] === null) {
+                // Perform risk checks
+                $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                // 1. Bot / Hacker User Agent check
+                $botPatterns = '/bot|crawler|spider|wget|curl|python|selenium|playwright|headless|puppeteer|phantomjs|postman/i';
+                $isBot = (bool)preg_match($botPatterns, $ua);
+                
+                // 2. IP Address check
+                $currentIp = Security::getClientIP();
+                $ipMatches = ($device['ip_address'] === $currentIp);
+                
+                // 3. Inactivity (Offline) check: 14 days
+                $lastSeen = strtotime($device['last_seen_at']);
+                $isRecent = (time() - $lastSeen <= 14 * 86400);
+                
+                if (!$isBot && $ipMatches && $isRecent) {
+                    $isTrusted = true;
+                }
+            }
+
+            if (!$isTrusted) {
+                if (empty($twoFactorCode)) {
+                    http_response_code(401);
+                    echo json_encode(['error' => '2FA code required', 'code' => 'TWO_FACTOR_REQUIRED']);
+                    return;
+                }
+                
+                $userSecurity = Database::fetchOne("SELECT two_factor_secret_encrypted FROM users WHERE id = ?", [$user['id']]);
+                if ($userSecurity && !empty($userSecurity['two_factor_secret_encrypted'])) {
+                    $secret = GoogleAuthenticator::decryptSecret($userSecurity['two_factor_secret_encrypted']);
+                    if (!GoogleAuthenticator::verifyCode($secret, $twoFactorCode)) {
+                        http_response_code(401);
+                        echo json_encode(['error' => 'Invalid 2FA code', 'code' => 'TWO_FACTOR_FAILED']);
+                        return;
+                    }
+                }
+            }
         }
 
-        // Register device
-        $deviceId = ExtensionDevice::create([
-            'user_id' => $user['id'],
-            'device_name' => $deviceName,
-            'browser_name' => $browserName,
-            'extension_id' => $extensionId
-        ]);
+        // Check max devices if this is a new device registration
+        $matchedDeviceId = ($device && $device['revoked_at'] === null) ? $device['id'] : null;
+        if (!$matchedDeviceId) {
+            $maxDevices = 10;
+            $maxSetting = Database::fetchOne("SELECT setting_value FROM app_settings WHERE setting_key = 'extension_max_devices_per_user'");
+            if ($maxSetting) $maxDevices = (int)$maxSetting['setting_value'];
+
+            if (ExtensionDevice::countByUser($user['id']) >= $maxDevices) {
+                http_response_code(403);
+                echo json_encode(['error' => 'Maximum number of extension devices reached. Revoke an existing device first.', 'code' => 'MAX_DEVICES']);
+                return;
+            }
+
+            // Register device
+            $deviceId = ExtensionDevice::create([
+                'user_id' => $user['id'],
+                'device_name' => $deviceName,
+                'browser_name' => $browserName,
+                'extension_id' => $extensionId
+            ]);
+        } else {
+            $deviceId = $matchedDeviceId;
+            // Update last_seen_at and ip_address
+            Database::execute(
+                "UPDATE extension_devices SET last_seen_at = NOW(), ip_address = ? WHERE id = ?",
+                [Security::getClientIP(), $deviceId]
+            );
+        }
 
         // Generate token
         $lifetimeDays = 30;

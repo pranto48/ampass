@@ -1,6 +1,6 @@
 {
   "name": "ampass-desktop",
-  "version": "1.72.0",
+  "version": "1.107.0",
   "description": "AMPass Password Manager - Desktop App",
   "scripts": {
     "dev": "tauri dev",

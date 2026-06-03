@@ -55,6 +55,9 @@
         <input type="text" id="loginUsername" class="input" placeholder="Username or email" autocomplete="username">
         <input type="password" id="loginPassword" class="input" placeholder="Password" autocomplete="current-password">
         <label class="check-label" style="margin:8px 0;font-size:11px;"><input type="checkbox" id="loginTrust"> Trust this browser (stay logged in)</label>
+        <div id="login2faContainer" style="display:none; width:100%; margin-bottom:8px;">
+          <input type="text" id="login2faCode" class="input" placeholder="2FA Code (Google Authenticator)" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+        </div>
         <button id="btnLogin" class="btn btn-primary btn-full">Sign In</button>
         <div id="loginError" class="error-msg" style="display:none;"></div>
         <button id="btnResetConn" class="btn btn-ghost btn-full" style="margin-top:8px;font-size:11px;">Reset Connection</button>

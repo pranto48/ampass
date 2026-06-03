@@ -137,10 +137,18 @@
     try {
       const serverUrl = await Storage.getServerUrl();
       const trustBrowser = document.getElementById('loginTrust')?.checked || false;
-      const result = await sendMsg('LOGIN', { serverUrl, username, password, trustBrowser });
+      const twoFactorCode = document.getElementById('login2faCode')?.value.trim() || '';
+      const result = await sendMsg('LOGIN', { serverUrl, username, password, trustBrowser, twoFactorCode });
       if (result.success) {
+        document.getElementById('login2faContainer').style.display = 'none';
+        document.getElementById('login2faCode').value = '';
         showView('viewUnlock');
       } else {
+        if (result.code === 'TWO_FACTOR_REQUIRED') {
+          document.getElementById('login2faContainer').style.display = 'block';
+          document.getElementById('login2faCode').focus();
+          throw new Error('2FA code required. Please enter your authenticator code.');
+        }
         throw new Error(result.error || 'Login failed');
       }
     } catch (e) {

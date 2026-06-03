@@ -221,3 +221,83 @@ fn decrypt_data(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     cipher.decrypt(nonce, ciphertext)
         .map_err(|_| "Decryption failed — cache may be corrupted or device key changed".to_string())
 }
+
+/// Write encrypted session file containing vault key.
+/// SECURITY: This session file is encrypted with the keychain device key.
+/// It contains: json with vault_key, timestamp, and active status.
+pub fn write_session_state(vault_key: &str) -> Result<(), String> {
+    let device_key = keychain::get_or_create_device_key()?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let data = serde_json::json!({
+        "vault_key": vault_key,
+        "timestamp": now,
+        "locked": false
+    });
+    let json_str = data.to_string();
+    let encrypted = encrypt_data(json_str.as_bytes(), &device_key)?;
+    let dir = data_dir()?;
+    let session_path = dir.join("session.enc");
+    fs::write(&session_path, encrypted)
+        .map_err(|e| format!("Failed to write session state: {}", e))
+}
+
+/// Read and decrypt session state.
+/// Returns (locked, vault_key).
+/// SECURITY: Session file is valid only for 5 minutes. If older, it is ignored and deleted.
+pub fn read_session_state() -> Result<(bool, Option<String>), String> {
+    let dir = data_dir()?;
+    let session_path = dir.join("session.enc");
+    if !session_path.exists() {
+        return Ok((true, None));
+    }
+    
+    let encrypted = fs::read(&session_path)
+        .map_err(|e| format!("Failed to read session state: {}", e))?;
+    
+    let device_key = keychain::get_or_create_device_key()?;
+    let decrypted = match decrypt_data(&encrypted, &device_key) {
+        Ok(d) => d,
+        Err(_) => {
+            let _ = fs::remove_file(&session_path);
+            return Ok((true, None));
+        }
+    };
+    
+    let data: serde_json::Value = match serde_json::from_slice(&decrypted) {
+        Ok(v) => v,
+        Err(_) => {
+            let _ = fs::remove_file(&session_path);
+            return Ok((true, None));
+        }
+    };
+    
+    let timestamp = data.get("timestamp").and_then(|v| v.as_u64()).unwrap_or(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    // Session state expires in 5 minutes (300 seconds)
+    if now - timestamp > 300 {
+        let _ = fs::remove_file(&session_path);
+        return Ok((true, None));
+    }
+    
+    let locked = data.get("locked").and_then(|v| v.as_bool()).unwrap_or(true);
+    let vault_key = data.get("vault_key").and_then(|v| v.as_str()).map(|s| s.to_string());
+    
+    Ok((locked, vault_key))
+}
+
+/// Delete session state file.
+pub fn delete_session_file() -> Result<(), String> {
+    let dir = data_dir()?;
+    let session_path = dir.join("session.enc");
+    if session_path.exists() {
+        let _ = fs::remove_file(&session_path);
+    }
+    Ok(())
+}

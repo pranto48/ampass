@@ -32,16 +32,24 @@ pub fn setup_lock_checker(app_handle: AppHandle) {
             let state = app_handle.state::<crate::AppState>();
             
             let locked = *state.locked.lock().unwrap_or_else(|e| e.into_inner());
-            if locked {
-                continue; // Already locked, nothing to do
-            }
-            
-            let last_activity = *state.last_activity.lock().unwrap_or_else(|e| e.into_inner());
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
+
+            if locked {
+                let _ = crate::storage::delete_session_file();
+                continue; // Already locked, nothing to do
+            }
             
+            // Refresh session timestamp every 30 seconds
+            if now % 30 < 2 {
+                if let Some(ref key) = *state.vault_key.lock().unwrap_or_else(|e| e.into_inner()) {
+                    let _ = crate::storage::write_session_state(key);
+                }
+            }
+            
+            let last_activity = *state.last_activity.lock().unwrap_or_else(|e| e.into_inner());
             let elapsed = now.saturating_sub(last_activity);
             
             if elapsed >= DEFAULT_LOCK_TIMEOUT_SECS {

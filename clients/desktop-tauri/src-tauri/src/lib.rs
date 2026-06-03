@@ -130,8 +130,11 @@ async fn clear_trusted_pc(state: tauri::State<'_, AppState>) -> Result<(), Strin
 #[tauri::command]
 async fn unlock_vault(vault_key_hex: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     // Store vault key in memory only
-    *state.vault_key.lock().map_err(|e| e.to_string())? = Some(vault_key_hex);
+    *state.vault_key.lock().map_err(|e| e.to_string())? = Some(vault_key_hex.clone());
     *state.locked.lock().map_err(|e| e.to_string())? = false;
+    
+    // Write encrypted session file
+    storage::write_session_state(&vault_key_hex).map_err(|e| e.to_string())?;
     
     // Update last activity
     let now = std::time::SystemTime::now()
@@ -148,6 +151,7 @@ async fn lock_vault(state: tauri::State<'_, AppState>) -> Result<(), String> {
     // SECURITY: Clear vault key from memory
     *state.vault_key.lock().map_err(|e| e.to_string())? = None;
     *state.locked.lock().map_err(|e| e.to_string())? = true;
+    let _ = storage::delete_session_file();
     Ok(())
 }
 
@@ -178,6 +182,7 @@ async fn wipe_local_data(state: tauri::State<'_, AppState>) -> Result<(), String
     let _ = keychain::delete_device_key();
     
     // Clear local files
+    let _ = storage::delete_session_file();
     storage::wipe_all().map_err(|e| e.to_string())?;
     
     Ok(())
@@ -190,7 +195,47 @@ async fn logout(state: tauri::State<'_, AppState>) -> Result<(), String> {
     *state.locked.lock().map_err(|e| e.to_string())? = true;
     let _ = keychain::delete_token();
     let _ = storage::delete_secure_config("derivation_params");
+    let _ = storage::delete_session_file();
     Ok(())
+}
+
+#[tauri::command]
+async fn open_url(url: String) -> Result<(), String> {
+    let url = url.trim().to_string();
+    if url.is_empty() {
+        return Err("Empty URL".to_string());
+    }
+    if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("mailto:") {
+        return Err("Unsupported URL protocol".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_app_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
 #[tauri::command]
@@ -612,8 +657,27 @@ async fn list_installed_apps() -> Result<Vec<serde_json::Value>, String> {
 }
 
 pub fn run() {
+    let args: Vec<String> = std::env::args().collect();
+    let is_native_messaging = args.iter().any(|arg| {
+        arg == "--native-messaging" 
+            || arg.starts_with("chrome-extension://") 
+            || arg.starts_with("moz-extension://")
+    });
+
+    if is_native_messaging {
+        native_messaging::run_native_messaging_loop(
+            || {
+                storage::read_session_state().unwrap_or((true, None))
+            },
+            || {
+                let _ = storage::delete_session_file();
+            }
+        );
+        std::process::exit(0);
+    }
+
     // Check for --show-unlock argument (launched by native messaging host)
-    let show_unlock = std::env::args().any(|a| a == "--show-unlock");
+    let show_unlock = args.iter().any(|a| a == "--show-unlock");
 
     let app_state = AppState::default();
     
@@ -663,6 +727,8 @@ pub fn run() {
             list_installed_apps,
             backup::pick_backup_file,
             backup::pick_save_location,
+            open_url,
+            get_app_version,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

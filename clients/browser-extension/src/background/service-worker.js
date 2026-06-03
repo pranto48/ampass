@@ -33,7 +33,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   handleMessage(msg, sender).then(sendResponse).catch(err => {
     // SECURITY: Never expose internal error details that might contain secrets
     const safeError = err.message || 'Operation failed';
-    sendResponse({ success: false, error: safeError });
+    sendResponse({ success: false, error: safeError, code: err.code });
   });
   return true; // Keep channel open for async response
 });
@@ -219,13 +219,26 @@ async function getStatus() {
 }
 
 async function login(payload) {
-  const { serverUrl, username, password, deviceName, trustBrowser } = payload;
+  const { serverUrl, username, password, deviceName, trustBrowser, twoFactorCode } = payload;
   await Storage.setServerUrl(serverUrl);
 
   const browserName = navigator.userAgent.includes('Edg') ? 'Edge' :
                       navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Browser';
 
-  const result = await ApiClient.login(username, password, deviceName || 'AMPass Extension', browserName);
+  const deviceId = await Storage.getLocal('deviceId');
+
+  const result = await ApiClient.login(
+    username, 
+    password, 
+    deviceName || 'AMPass Extension', 
+    browserName, 
+    deviceId, 
+    twoFactorCode
+  );
+
+  if (result.device_id) {
+    await Storage.setLocal('deviceId', result.device_id);
+  }
 
   await Storage.setToken(result.token, !!trustBrowser);
   await Storage.setDerivationParams(result.derivation_params);
