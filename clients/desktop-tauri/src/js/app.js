@@ -461,7 +461,13 @@
   }
 
   function itemRow(item) {
-    const icon = item._type === 'login' ? '🌐' : item._type === 'identity' ? '👤' : item._type === 'secure_note' ? '📝' : '📦';
+    let icon = item._type === 'login' ? '🌐' : item._type === 'identity' ? '👤' : item._type === 'secure_note' ? '📝' : '📦';
+    if (item._type === 'login' && item.url) {
+      const domain = extractDomain(item.url);
+      if (domain) {
+        icon = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:20px; height:20px; border-radius:4px; object-fit:contain; display:block;" onerror="this.outerHTML='🌐'">`;
+      }
+    }
     let subtitle = item.username || item.email || '';
     if (item.url) {
       subtitle = subtitle ? subtitle + ' • ' + item.url : item.url;
@@ -1068,7 +1074,20 @@
     }
 
     function extractDomain(url) {
-      try { return new URL(url).hostname; } catch { return ''; }
+      if (!url) return '';
+      let host = url;
+      try {
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = 'https://' + url;
+        }
+        host = new URL(url).hostname;
+      } catch (e) {
+        // Keep as is
+      }
+      if (host.startsWith('www.')) {
+        host = host.substring(4);
+      }
+      return host;
     }
 
     function estimateStrength(pw) {

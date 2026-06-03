@@ -27,7 +27,7 @@
       "tooltip": "AMPass - Vault Locked"
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://localhost http://localhost:* http://127.0.0.1 http://127.0.0.1:*"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google.com https://t3.gstatic.com; connect-src 'self' https://* http://localhost http://localhost:* http://127.0.0.1 http://127.0.0.1:*"
     }
   },
   "bundle": {
