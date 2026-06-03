@@ -43,7 +43,7 @@ require __DIR__ . '/../layouts/auth.php';
         </div>
     </div>
 
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
         window.AMPass = { baseUrl: '<?= APP_URL ?>' };
     </script>
     <script src="<?= APP_URL ?>/public/js/app.js?v=<?= time() ?>"></script>

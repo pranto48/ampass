@@ -7,7 +7,7 @@ $history = $data['history'] ?? [];
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
         (function() {
             const theme = localStorage.getItem('ampass_theme') || 'light';
             document.documentElement.setAttribute('data-theme', theme);
@@ -138,7 +138,7 @@ $history = $data['history'] ?? [];
     <p class="text-muted" style="margin-top:16px;font-size:0.72rem;">&#9888; AMPass import feature handles plaintext password exports and requires professional security audit before real credential storage.</p>
 </div>
 
-<script>
+<script nonce="<?= Security::getNonce() ?>">
 window.AMPass = {
     baseUrl: '<?= APP_URL ?>',
     csrfToken: '<?= $csrfToken ?>',

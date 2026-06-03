@@ -532,7 +532,14 @@
 
             // Update username/subtitle
             const usernameEl = item.querySelector('[data-decrypt="username"]');
-            if (usernameEl) usernameEl.textContent = decrypted.username || '(no username)';
+            if (usernameEl) {
+                let subtitle = decrypted.username || '';
+                const url = decrypted.url || decrypted.website || decrypted.link;
+                if (url) {
+                    subtitle = subtitle ? subtitle + ' • ' + url : url;
+                }
+                usernameEl.textContent = subtitle || '(no username)';
+            }
 
             // Update website favicon
             const url = decrypted.url || decrypted.website || decrypted.link;

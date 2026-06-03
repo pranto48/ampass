@@ -462,9 +462,13 @@
 
   function itemRow(item) {
     const icon = item._type === 'login' ? '🌐' : item._type === 'identity' ? '👤' : item._type === 'secure_note' ? '📝' : '📦';
+    let subtitle = item.username || item.email || '';
+    if (item.url) {
+      subtitle = subtitle ? subtitle + ' • ' + item.url : item.url;
+    }
     return `<div class="item-row" data-id="${item._id}">
       <div class="item-icon">${icon}</div>
-      <div class="item-info"><div class="item-title">${esc(item.title || 'Untitled')}</div><div class="item-sub">${esc(item.username || item.email || item.url || '')}</div></div>
+      <div class="item-info"><div class="item-title">${esc(item.title || 'Untitled')}</div><div class="item-sub">${esc(subtitle || '')}</div></div>
       <div class="item-actions"><button class="btn-ghost-sm" data-copy-user="${item._id}" title="Copy username">👤</button><button class="btn-ghost-sm" data-copy-pass="${item._id}" title="Copy password">📋</button></div>
     </div>`;
   }

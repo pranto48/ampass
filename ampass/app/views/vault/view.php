@@ -10,7 +10,7 @@ if (!$item) { header('Location: ' . APP_URL . '/vault'); exit; }
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
         (function() {
             const theme = localStorage.getItem('ampass_theme') || 'light';
             document.documentElement.setAttribute('data-theme', theme);
@@ -79,7 +79,7 @@ if (!$item) { header('Location: ' . APP_URL . '/vault'); exit; }
         </div>
     </div>
 
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
         window.AMPass = {
             baseUrl: '<?= APP_URL ?>',
             csrfToken: '<?= $csrfToken ?>',

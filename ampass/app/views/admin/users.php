@@ -8,7 +8,7 @@ $totalPages = $data['totalPages'] ?? 1;
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
         (function() {
             const theme = localStorage.getItem('ampass_theme') || 'light';
             document.documentElement.setAttribute('data-theme', theme);

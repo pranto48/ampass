@@ -30,7 +30,7 @@ require __DIR__ . '/../layouts/auth.php';
             </div>
 
             <!-- Hidden derivation params for client-side key derivation -->
-            <script>
+            <script nonce="<?= Security::getNonce() ?>">
                 window.AMPass = {
                     baseUrl: '<?= APP_URL ?>',
                     derivationParams: <?= Security::jsonEncodeForHTML($derivationParams ?? []) ?>

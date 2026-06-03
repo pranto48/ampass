@@ -12,7 +12,7 @@ $csrfToken = CSRF::generateToken();
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
         (function() {
             const theme = localStorage.getItem('ampass_theme') || 'light';
             document.documentElement.setAttribute('data-theme', theme);
@@ -225,8 +225,7 @@ $csrfToken = CSRF::generateToken();
     <!-- Toast notifications created dynamically by JS -->
 
     <!-- Global data for JavaScript -->
-    <?php $nonce = base64_encode(random_bytes(16)); ?>
-    <script nonce="<?= $nonce ?>">
+    <script nonce="<?= Security::getNonce() ?>">
         window.AMPass = {
             baseUrl: '<?= APP_URL ?>',
             csrfToken: '<?= $csrfToken ?>',
@@ -242,7 +241,7 @@ $csrfToken = CSRF::generateToken();
     <script src="<?= APP_URL ?>/public/js/generator.js?v=<?= time() ?>"></script>
     <?php endif; ?>
     <!-- Register service worker -->
-    <script>
+    <script nonce="<?= Security::getNonce() ?>">
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('<?= APP_URL ?>/sw.js').catch(() => {});
     }
