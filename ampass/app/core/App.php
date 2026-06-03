@@ -223,8 +223,16 @@ class App {
         $allowed = false;
         if (!empty($allowedOrigins)) {
             $allowed = in_array($origin, $allowedOrigins, true);
-        } elseif (($isExtensionOrigin || $isDesktopOrigin) && Security::isLocalhost()) {
-            // Allow browser extension and desktop app origins on localhost for development.
+        }
+        
+        // Automatically allow native Tauri desktop application origins (e.g. tauri://localhost)
+        // since custom protocol schemes are safe and cannot be spoofed by regular websites.
+        if (!$allowed && $isDesktopOrigin) {
+            $allowed = true;
+        }
+
+        // Allow extension origins in dev mode on localhost.
+        if (!$allowed && ($isExtensionOrigin && Security::isLocalhost())) {
             $allowed = true;
         }
 
