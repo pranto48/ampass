@@ -1,6 +1,6 @@
 [package]
 name = "ampass-desktop"
-version = "1.102.0"
+version = "1.107.0"
 description = "AMPass Password Manager - Desktop App"
 authors = ["AMPass"]
 edition = "2021"

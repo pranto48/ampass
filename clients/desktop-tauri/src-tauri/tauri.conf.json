@@ -1,6 +1,6 @@
 {
   "productName": "AMPass",
-  "version": "1.102.0",
+  "version": "1.107.0",
   "identifier": "com.ampass.desktop",
   "build": {
     "frontendDist": "../src",
