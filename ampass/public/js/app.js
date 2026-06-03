@@ -548,7 +548,7 @@
                 if (domain) {
                     const iconEl = item.querySelector('.vault-item-icon');
                     if (iconEl) {
-                        iconEl.innerHTML = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:20px; height:20px; border-radius:4px; object-fit:contain; display:block;">`;
+                        iconEl.innerHTML = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:20px; height:20px; border-radius:4px; object-fit:contain; display:block;" onerror="this.parentElement.style.background=''; this.outerHTML='🌐';">`;
                         iconEl.style.background = 'transparent';
                     }
                 }

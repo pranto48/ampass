@@ -1087,7 +1087,7 @@
       if (host.startsWith('www.')) {
         host = host.substring(4);
       }
-      return host;
+      return host.toLowerCase().trim();
     }
 
     function estimateStrength(pw) {

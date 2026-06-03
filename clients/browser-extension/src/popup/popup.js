@@ -293,7 +293,13 @@
       row.dataset.id = item.id;
       row.dataset.type = item.item_type || 'login';
 
-      const icon = getItemIcon(item.item_type);
+      let icon = getItemIcon(item.item_type);
+      if ((item.item_type === 'login' || !item.item_type) && item.url) {
+        const domain = DomainUtils.getBaseDomain(item.url);
+        if (domain) {
+          icon = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:18px; height:18px; border-radius:3px; object-fit:contain; display:block;" onerror="this.outerHTML='🔑'">`;
+        }
+      }
       row.innerHTML = `
         <div class="item-icon">${icon}</div>
         <div class="item-info">
@@ -344,7 +350,19 @@
     const isNote = meta.item_type === 'secure_note' || meta.item_type === 'note';
 
     // Populate header
-    document.getElementById('detailIcon').textContent = getItemIcon(meta.item_type);
+    let detailIconHtml = getItemIcon(meta.item_type);
+    if (isLogin && result.item.url) {
+      const domain = DomainUtils.getBaseDomain(result.item.url);
+      if (domain) {
+        detailIconHtml = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:24px; height:24px; border-radius:4px; object-fit:contain; display:inline-block; vertical-align:middle;" onerror="this.outerHTML='🔑'">`;
+      }
+    }
+    const detailIconEl = document.getElementById('detailIcon');
+    if (detailIconHtml.startsWith('<img')) {
+      detailIconEl.innerHTML = detailIconHtml;
+    } else {
+      detailIconEl.textContent = detailIconHtml;
+    }
     document.getElementById('detailTitle').textContent = result.item.title || 'Untitled';
     document.getElementById('detailUrl').textContent = result.item.url || '';
 
