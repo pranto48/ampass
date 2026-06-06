@@ -331,9 +331,15 @@ class ExtensionApiController {
             if ($maxSetting) $maxDevices = (int)$maxSetting['setting_value'];
 
             if (ExtensionDevice::countByUser($user['id']) >= $maxDevices) {
-                http_response_code(403);
-                echo json_encode(['error' => 'Maximum number of extension devices reached. Revoke an existing device first.', 'code' => 'MAX_DEVICES']);
-                return;
+                // Auto-revoke the oldest device(s) to make room
+                $toRevokeCount = ExtensionDevice::countByUser($user['id']) - $maxDevices + 1;
+                $oldestDevices = Database::fetchAll(
+                    "SELECT id FROM extension_devices WHERE user_id = ? AND revoked_at IS NULL ORDER BY last_seen_at ASC LIMIT ?",
+                    [$user['id'], $toRevokeCount]
+                );
+                foreach ($oldestDevices as $od) {
+                    ExtensionDevice::revoke($od['id'], $user['id']);
+                }
             }
 
             // Register device
