@@ -1499,7 +1499,7 @@
         
         if (!container || !listEl || !nameEl) return;
         
-        if (!activeApp || !activeApp.name) {
+        if (!activeApp || (!activeApp.name && !activeApp.title)) {
           container.style.display = 'none';
           return;
         }
@@ -1510,14 +1510,24 @@
           
           const appName = (item.application_name || item.title || '').toLowerCase();
           const exePath = (item.executable_path || item.url || '').toLowerCase();
-          const activeName = activeApp.name.toLowerCase();
-          const activeExe = activeApp.executable_path.toLowerCase();
+          const activeName = (activeApp.name || '').toLowerCase();
+          const activeExe = (activeApp.executable_path || '').toLowerCase();
           const activeTitle = (activeApp.title || '').toLowerCase();
           
           // Special case for Remote Desktop
           if (item._type === 'remote_desktop') {
-            if (activeExe.endsWith('mstsc.exe') || activeName.includes('remote desktop')) {
-              // Always show RDP items if the Remote Desktop client is the active app
+            const activeFile = activeExe.split('\\').pop().split('/').pop();
+            if (
+              activeExe.endsWith('mstsc.exe') ||
+              activeName.includes('remote desktop') ||
+              activeName.includes('credentialuibroker') ||
+              activeName.includes('windows security') ||
+              activeFile.includes('credentialuibroker') ||
+              activeTitle.includes('windows security') ||
+              activeTitle.includes('remote desktop') ||
+              activeTitle.includes('credentials')
+            ) {
+              // Always show RDP items if the Remote Desktop client or Windows Security prompt is the active app
               return true;
             }
           }
@@ -1542,7 +1552,7 @@
         });
         
         if (matching.length > 0) {
-          nameEl.textContent = activeApp.name;
+          nameEl.textContent = activeApp.name || activeApp.title;
           listEl.innerHTML = matching.map(i => {
             if (i._type === 'app_account') {
               return appAccountRow(i);

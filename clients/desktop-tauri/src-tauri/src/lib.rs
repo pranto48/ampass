@@ -852,8 +852,13 @@ fn get_active_app_windows() -> Result<ActiveAppInfo, String> {
         // Open Process
         let process_handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if process_handle == 0 {
+            let name = if title == "Windows Security" || title.to_lowercase().contains("windows security") {
+                "Windows Security".to_string()
+            } else {
+                String::new()
+            };
             return Ok(ActiveAppInfo {
-                name: String::new(),
+                name,
                 executable_path: String::new(),
                 title,
             });
@@ -869,7 +874,7 @@ fn get_active_app_windows() -> Result<ActiveAppInfo, String> {
         }
         CloseHandle(process_handle);
 
-        let name = if !exe_path.is_empty() {
+        let mut name = if !exe_path.is_empty() {
             std::path::Path::new(&exe_path)
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
@@ -877,6 +882,10 @@ fn get_active_app_windows() -> Result<ActiveAppInfo, String> {
         } else {
             String::new()
         };
+
+        if name.is_empty() && (title == "Windows Security" || title.to_lowercase().contains("windows security")) {
+            name = "Windows Security".to_string();
+        }
 
         Ok(ActiveAppInfo {
             name,
