@@ -333,6 +333,7 @@
     await renderSharing();
     updateSyncTime();
     await invoke('record_activity');
+    try { await updateActiveAppSuggestion(); } catch (e) {}
   }
 
   async function decryptAll() {
@@ -1485,6 +1486,74 @@
       if (/[^A-Za-z0-9]/.test(pw)) score += 15;
       return Math.min(100, score);
     }
+
+    async function updateActiveAppSuggestion() {
+      if (typeof vaultKeyHex === 'undefined' || !vaultKeyHex) return; // Only if unlocked
+      try {
+        const activeApp = await invoke('get_detected_app');
+        const container = document.getElementById('detectedAppSection');
+        const listEl = document.getElementById('detectedAppList');
+        const nameEl = document.getElementById('detectedAppName');
+        
+        if (!container || !listEl || !nameEl) return;
+        
+        if (!activeApp || !activeApp.name) {
+          container.style.display = 'none';
+          return;
+        }
+        
+        // Filter decrypted items of type 'app_account' or 'login' that match activeApp
+        const matching = allDecrypted.filter(item => {
+          if (item._type !== 'app_account' && item._type !== 'login') return false;
+          
+          const appName = (item.application_name || item.title || '').toLowerCase();
+          const exePath = (item.executable_path || item.url || '').toLowerCase();
+          const activeName = activeApp.name.toLowerCase();
+          const activeExe = activeApp.executable_path.toLowerCase();
+          
+          // Exact match on executable path filename
+          if (exePath && (activeExe.endsWith(exePath) || exePath.endsWith(activeExe))) {
+            return true;
+          }
+          
+          // Substring match on app name / title
+          if (appName && (activeName.includes(appName) || appName.includes(activeName))) {
+            return true;
+          }
+          
+          // Substring match on executable name
+          const activeFile = activeExe.split('\\').pop().split('/').pop();
+          if (appName && activeFile.includes(appName)) {
+            return true;
+          }
+          
+          return false;
+        });
+        
+        if (matching.length > 0) {
+          nameEl.textContent = activeApp.name;
+          listEl.innerHTML = matching.map(i => {
+            if (i._type === 'app_account') {
+              return appAccountRow(i);
+            } else {
+              return itemRow(i);
+            }
+          }).join('');
+          container.style.display = 'block';
+        } else {
+          container.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Error fetching active app suggestions:', e);
+      }
+    }
+
+    window.addEventListener('focus', () => {
+      updateActiveAppSuggestion().catch(() => {});
+    });
+    setInterval(() => {
+      updateActiveAppSuggestion().catch(() => {});
+    }, 2000);
   })();
 
   // ===== Start =====

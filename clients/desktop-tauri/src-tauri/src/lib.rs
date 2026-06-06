@@ -22,6 +22,7 @@ pub struct AppState {
     pub auth_token: Mutex<Option<String>>,
     pub locked: Mutex<bool>,
     pub last_activity: Mutex<u64>,
+    pub last_active_app: Mutex<Option<ActiveAppInfo>>,
 }
 
 impl Default for AppState {
@@ -32,6 +33,7 @@ impl Default for AppState {
             auth_token: Mutex::new(None),
             locked: Mutex::new(true),
             last_activity: Mutex::new(0),
+            last_active_app: Mutex::new(None),
         }
     }
 }
@@ -729,6 +731,7 @@ pub fn run() {
             backup::pick_save_location,
             open_url,
             get_app_version,
+            get_detected_app,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -742,6 +745,28 @@ pub fn run() {
             
             // Set up idle lock checker
             lock::setup_lock_checker(app.handle().clone());
+
+            // Set up active application tracker background thread
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                    if let Ok(info) = get_active_app_internal() {
+                        // Ignore our own app
+                        let own_names = ["ampass-desktop", "ampass", "AMPass", "ampass_desktop"];
+                        let is_own = own_names.iter().any(|&name| {
+                            info.name.to_lowercase().contains(name) || info.executable_path.to_lowercase().contains(name)
+                        });
+                        
+                        if !is_own && !info.name.is_empty() {
+                            let state = app_handle.state::<AppState>();
+                            if let Ok(mut guard) = state.last_active_app.lock() {
+                                *guard = Some(info);
+                            }
+                        }
+                    }
+                }
+            });
 
             // If launched with --show-unlock, emit event to frontend after window is ready
             if show_unlock {
@@ -760,4 +785,170 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running AMPass desktop app");
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default)]
+pub struct ActiveAppInfo {
+    pub name: String,
+    pub executable_path: String,
+    pub title: String,
+}
+
+#[tauri::command]
+async fn get_detected_app(state: tauri::State<'_, AppState>) -> Result<Option<ActiveAppInfo>, String> {
+    let last = state.last_active_app.lock().map_err(|e| e.to_string())?.clone();
+    Ok(last)
+}
+
+fn get_active_app_internal() -> Result<ActiveAppInfo, String> {
+    #[cfg(target_os = "windows")]
+    {
+        get_active_app_windows()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        get_active_app_macos()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        Ok(ActiveAppInfo::default())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_active_app_windows() -> Result<ActiveAppInfo, String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
+    use windows_sys::Win32::System::Threading::{GetWindowThreadProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::System::ProcessStatus::GetModuleFileNameExW;
+    use windows_sys::Win32::Foundation::CloseHandle;
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd == 0 {
+            return Err("No active window".to_string());
+        }
+
+        // Get window title
+        let mut title_buf = [0u16; 512];
+        let title_len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 512);
+        let title = if title_len > 0 {
+            String::from_utf16_lossy(&title_buf[..title_len as usize])
+        } else {
+            String::new()
+        };
+
+        // Get Process ID
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+
+        if pid == 0 {
+            return Ok(ActiveAppInfo {
+                name: String::new(),
+                executable_path: String::new(),
+                title,
+            });
+        }
+
+        // Open Process
+        let process_handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process_handle == 0 {
+            return Ok(ActiveAppInfo {
+                name: String::new(),
+                executable_path: String::new(),
+                title,
+            });
+        }
+
+        // Get Executable Path
+        let mut path_buf = [0u16; 1024];
+        let mut path_len = 1024u32;
+        let mut exe_path = String::new();
+        let res = GetModuleFileNameExW(process_handle, 0, path_buf.as_mut_ptr(), path_len);
+        if res > 0 {
+            exe_path = String::from_utf16_lossy(&path_buf[..res as usize]);
+        }
+        CloseHandle(process_handle);
+
+        let name = if !exe_path.is_empty() {
+            std::path::Path::new(&exe_path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        Ok(ActiveAppInfo {
+            name,
+            executable_path: exe_path,
+            title,
+        })
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn get_active_app_macos() -> Result<ActiveAppInfo, String> {
+    // Run `lsappinfo front` to get the active ASN
+    let front_output = std::process::Command::new("lsappinfo")
+        .arg("front")
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    let front_str = String::from_utf8_lossy(&front_output.stdout).trim().to_string();
+    if front_str.is_empty() {
+        return Err("No frontmost application found".to_string());
+    }
+
+    // Run `lsappinfo info [ASN]` to get info
+    let info_output = std::process::Command::new("lsappinfo")
+        .args(&["info", &front_str])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let info_str = String::from_utf8_lossy(&info_output.stdout);
+    
+    // Parse info
+    let mut name = String::new();
+    let mut exe_path = String::new();
+    
+    if let Some(first_line) = info_str.lines().next() {
+        if let Some(quote_end) = first_line[1..].find('"') {
+            name = first_line[1..quote_end + 1].to_string();
+        }
+    }
+
+    for line in info_str.lines() {
+        let line = line.trim();
+        if line.starts_with("executable path=") {
+            if let Some(start) = line.find('"') {
+                if let Some(end) = line[start+1..].find('"') {
+                    exe_path = line[start+1..start+1+end].to_string();
+                }
+            }
+        }
+    }
+
+    let title = get_frontmost_window_title_macos().unwrap_or_default();
+
+    Ok(ActiveAppInfo {
+        name,
+        executable_path: exe_path,
+        title,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn get_frontmost_window_title_macos() -> Option<String> {
+    let output = std::process::Command::new("osascript")
+        .args(&["-e", "tell application \"System Events\" to get name of first window of (first process whose frontmost is true)"])
+        .output()
+        .ok()?;
+    
+    if output.status.success() {
+        let title = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !title.is_empty() {
+            return Some(title);
+        }
+    }
+    None
 }
