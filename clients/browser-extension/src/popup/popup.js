@@ -263,6 +263,7 @@
 
     isOnCurrentSite = false;
     if (allItemsSection) allItemsSection.style.display = 'none';
+    if (allItemsList) allItemsList.innerHTML = '';
 
     if (currentUrl && currentUrl.startsWith('http')) {
       const matchResult = await sendMsg('GET_MATCHES', { url: currentUrl });

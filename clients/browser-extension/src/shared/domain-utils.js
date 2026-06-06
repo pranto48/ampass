@@ -8,8 +8,13 @@ const DomainUtils = {
    * Extract the registrable domain from a URL (e.g., "mail.google.com" → "google.com")
    */
   getBaseDomain(url) {
+    if (!url) return '';
+    let normalized = url.trim();
+    if (!normalized.includes('://')) {
+      normalized = 'https://' + normalized;
+    }
     try {
-      const parsed = new URL(url);
+      const parsed = new URL(normalized);
       const host = parsed.hostname.toLowerCase();
 
       // Handle IP addresses
