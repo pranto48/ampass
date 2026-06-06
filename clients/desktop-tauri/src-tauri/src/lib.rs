@@ -817,8 +817,8 @@ fn get_active_app_internal() -> Result<ActiveAppInfo, String> {
 
 #[cfg(target_os = "windows")]
 fn get_active_app_windows() -> Result<ActiveAppInfo, String> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
-    use windows_sys::Win32::System::Threading::{GetWindowThreadProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId};
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
     use windows_sys::Win32::System::ProcessStatus::GetModuleFileNameExW;
     use windows_sys::Win32::Foundation::CloseHandle;
 
