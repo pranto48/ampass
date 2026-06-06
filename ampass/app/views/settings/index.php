@@ -143,6 +143,17 @@ $error = Session::flash('error');
                 <p><strong>AMPass</strong> <?= htmlspecialchars(defined('AMPASS_VERSION_DISPLAY') ? AMPASS_VERSION_DISPLAY : ('v' . APP_VERSION)) ?></p>
                 <p>Secure Password Vault</p>
                 <p class="text-muted">Your vault data is encrypted end-to-end. The server never sees your plaintext passwords.</p>
+                
+                <div class="security-warning-box" style="margin-top: 15px; padding: 12px; border: 1px solid #ea580c; background-color: rgba(234, 88, 12, 0.1); border-radius: 6px; font-size: 0.85rem; color: #f97316;">
+                    <p style="margin: 0 0 6px 0; font-weight: bold; display: flex; align-items: center; gap: 4px;">
+                        <span>⚠️ Security Disclaimer & Notice</span>
+                    </p>
+                    <p style="margin: 0; line-height: 1.4;">
+                        This application has <strong>NOT</strong> been professionally audited by an independent security firm. 
+                        While it uses industry-standard client-side encryption (AES-256-GCM, PBKDF2), it is provided "as-is" without warranty. 
+                        Do not trust with high-value credentials or production environments until a proper cryptographic review is performed. Use at your own risk.
+                    </p>
+                </div>
             </div>
         </div>
     </div>

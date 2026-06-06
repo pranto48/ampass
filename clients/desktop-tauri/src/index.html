@@ -232,7 +232,13 @@
               <div class="setting-group"><h3>Account</h3>
                 <button id="btnLogout" class="btn-ghost">Logout & Disconnect</button>
               </div>
-              <div class="setting-group"><h3>About</h3><p class="setting-val">AMPass Desktop <span id="aboutVersion">v1.107.0</span><br>⚠️ Not professionally audited.</p></div>
+              <div class="setting-group">
+                <h3>About</h3>
+                <p class="setting-val">AMPass Desktop <span id="aboutVersion">v1.107.0</span></p>
+                <div class="security-warning-box" style="margin-top: 8px; padding: 10px; border: 1px solid #ea580c; background-color: rgba(234, 88, 12, 0.08); border-radius: 6px; font-size: 0.8rem; color: #f97316; line-height: 1.4;">
+                  <strong>⚠️ Security Notice:</strong> This software has not been professionally audited by any security firm or cryptographer. All encryption is client-side, but it is recommended only for development or non-critical personal environments. Use at your own risk.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -354,6 +360,11 @@
     <!-- Toast -->
     <div id="toast" class="toast" style="display:none;"></div>
   </div>
+
+  <!-- Firebase SDK (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <script src="js/crypto.js"></script>
   <script src="js/api-client.js"></script>

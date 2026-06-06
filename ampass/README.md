@@ -18,10 +18,11 @@ While AMPass implements industry-standard encryption (AES-256-GCM, PBKDF2, Argon
 5. Verify the zero-knowledge claims with formal analysis
 
 **Known architectural limitations:**
-- The master password IS sent to the server (over HTTPS) for verification. True zero-knowledge would require SRP or OPAQUE protocol.
-- Client-side encryption relies on the integrity of JavaScript served by the server. A compromised server could serve malicious JS.
+- *Current PHP/MySQL architecture:* The master password IS sent to the server (over HTTPS) for verification. True zero-knowledge would require SRP or OPAQUE protocol.
+- *Planned Firebase architecture:* Shift authentication entirely to Firebase Auth (performed client-side) and store only zero-knowledge encrypted vaults in Cloud Firestore. Since the client is hosted on static pages (GitHub Pages), the security guarantees will depend entirely on client-side JS execution safety and Firestore security rules.
+- Client-side encryption relies on the integrity of JavaScript served by the hosting server (cPanel or GitHub Pages). A compromised host could serve malicious JavaScript that exfiltrates the decrypted vault key.
 - Without a browser extension, the app cannot provide true autofill isolation.
-- Session-based vault unlock means a compromised session grants vault access.
+- Session-based vault unlock means a compromised session/browser memory grants vault access.
 
 **Use at your own risk. The authors accept no liability for data loss or security breaches.**
 

@@ -306,7 +306,7 @@
     const iterations = 100000;
     const wrappingKey = await Crypto.deriveKey(masterPassword, salt, iterations);
     const encrypted = await Crypto.encrypt(vaultKeyRaw, wrappingKey);
-    await Api.request('vault/init-key', { body: { encryption_salt: salt, encrypted_vault_key: encrypted.ciphertext, vault_key_iv: encrypted.iv, key_iterations: iterations } });
+    await Api.initVaultKey(salt, encrypted.ciphertext, encrypted.iv, iterations);
     derivationParams = { encryption_salt: salt, encrypted_vault_key: encrypted.ciphertext, vault_key_iv: encrypted.iv, key_iterations: iterations, needs_setup: false };
     await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
     vaultKeyHex = vaultKeyRaw;
