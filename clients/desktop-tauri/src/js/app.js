@@ -610,6 +610,49 @@
           </div>
         `;
       }
+      
+      const parsed = parseWebAddress(item.url || '');
+      const subdomain = item.subdomain || parsed.subdomain;
+      const domain = item.domain || parsed.domain;
+      const port = item.port || parsed.port;
+      const path = item.path || parsed.path;
+
+      if (subdomain) {
+        html += `
+          <div class="field-label">Subdomain</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(subdomain)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="navigator.clipboard.writeText('${esc(subdomain)}'); toast('Copied Subdomain!');" style="padding:6px 10px;" title="Copy Subdomain">📋</button>
+          </div>
+        `;
+      }
+      if (domain) {
+        html += `
+          <div class="field-label">Domain</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(domain)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="navigator.clipboard.writeText('${esc(domain)}'); toast('Copied Domain!');" style="padding:6px 10px;" title="Copy Domain">📋</button>
+          </div>
+        `;
+      }
+      if (port) {
+        html += `
+          <div class="field-label">Port</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(port)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="navigator.clipboard.writeText('${esc(port)}'); toast('Copied Port!');" style="padding:6px 10px;" title="Copy Port">📋</button>
+          </div>
+        `;
+      }
+      if (path) {
+        html += `
+          <div class="field-label">Path</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
+            <input type="text" class="field-input" value="${esc(path)}" readonly style="flex:1;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7;">
+            <button class="btn-ghost-sm" onclick="navigator.clipboard.writeText('${esc(path)}'); toast('Copied Path!');" style="padding:6px 10px;" title="Copy Path">📋</button>
+          </div>
+        `;
+      }
       if (item.username) {
         html += `
           <div class="field-label">Username</div>
@@ -785,7 +828,17 @@
     let html = '<div class="auth-form">';
     html += '<label class="field-label">Title</label><input type="text" id="addTitle" class="field-input">';
     if (type === 'login') {
-      html += '<label class="field-label">URL</label><input type="url" id="addUrl" class="field-input">';
+      html += '<label class="field-label">URL</label><input type="url" id="addUrl" class="field-input" placeholder="https://example.com/login">';
+      
+      html += '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">';
+      html += '  <div><label class="field-label">Subdomain</label><input type="text" id="addSubdomain" class="field-input" placeholder="e.g. ampass.arif.bd"></div>';
+      html += '  <div><label class="field-label">Domain</label><input type="text" id="addDomain" class="field-input" placeholder="e.g. arif.bd"></div>';
+      html += '</div>';
+      html += '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">';
+      html += '  <div><label class="field-label">Port</label><input type="text" id="addPort" class="field-input" placeholder="e.g. 6655"></div>';
+      html += '  <div><label class="field-label">Path</label><input type="text" id="addPath" class="field-input" placeholder="e.g. /ampass"></div>';
+      html += '</div>';
+
       html += '<label class="field-label">Username</label><input type="text" id="addUser" class="field-input">';
       html += '<label class="field-label">Password</label><input type="password" id="addPass" class="field-input">';
       html += '<label class="field-label">TOTP Secret (optional)</label><input type="text" id="addTotp" class="field-input">';
@@ -829,6 +882,20 @@
     document.getElementById('modalFooter').innerHTML = `<button class="btn-ghost-sm" onclick="document.getElementById('itemModal').style.display='none'">Cancel</button><button class="btn-primary" style="width:auto;margin:0;padding:8px 16px;" id="btnSaveNew">Save</button>`;
     document.getElementById('itemModal').style.display = 'flex';
     document.getElementById('btnSaveNew').addEventListener('click', () => saveNewItem(type));
+    
+    if (type === 'login') {
+      const urlInput = document.getElementById('addUrl');
+      if (urlInput) {
+        urlInput.addEventListener('input', () => {
+          const parsed = parseWebAddress(urlInput.value);
+          document.getElementById('addSubdomain').value = parsed.subdomain;
+          document.getElementById('addDomain').value = parsed.domain;
+          document.getElementById('addPort').value = parsed.port;
+          document.getElementById('addPath').value = parsed.path;
+        });
+      }
+    }
+
     // Browse exe button
     const browseBtn = document.getElementById('btnBrowseExe');
     if (browseBtn) browseBtn.addEventListener('click', async () => {
@@ -840,6 +907,10 @@
     const data = { title: document.getElementById('addTitle')?.value || '', notes: document.getElementById('addNotes')?.value || '' };
     if (type === 'login') {
       data.url = document.getElementById('addUrl')?.value || '';
+      data.subdomain = document.getElementById('addSubdomain')?.value || '';
+      data.domain = document.getElementById('addDomain')?.value || '';
+      data.port = document.getElementById('addPort')?.value || '';
+      data.path = document.getElementById('addPath')?.value || '';
       data.username = document.getElementById('addUser')?.value || '';
       data.password = document.getElementById('addPass')?.value || '';
       data.totp_secret = document.getElementById('addTotp')?.value || '';
@@ -895,7 +966,23 @@
     html += `<label class="field-label">Title</label><input type="text" id="editTitle" class="field-input" value="${esc(item.title || '')}">`;
     
     if (type === 'login') {
+      const parsed = parseWebAddress(item.url || '');
+      const subdomain = item.subdomain || parsed.subdomain;
+      const domain = item.domain || parsed.domain;
+      const port = item.port || parsed.port;
+      const path = item.path || parsed.path;
+
       html += `<label class="field-label">URL</label><input type="url" id="editUrl" class="field-input" value="${esc(item.url || '')}">`;
+
+      html += '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">';
+      html += `  <div><label class="field-label">Subdomain</label><input type="text" id="editSubdomain" class="field-input" value="${esc(subdomain)}" placeholder="e.g. ampass.arif.bd"></div>`;
+      html += `  <div><label class="field-label">Domain</label><input type="text" id="editDomain" class="field-input" value="${esc(domain)}" placeholder="e.g. arif.bd"></div>`;
+      html += '</div>';
+      html += '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">';
+      html += `  <div><label class="field-label">Port</label><input type="text" id="editPort" class="field-input" value="${esc(port)}" placeholder="e.g. 6655"></div>`;
+      html += `  <div><label class="field-label">Path</label><input type="text" id="editPath" class="field-input" value="${esc(path)}" placeholder="e.g. /ampass"></div>`;
+      html += '</div>';
+
       html += `<label class="field-label">Username</label><input type="text" id="editUser" class="field-input" value="${esc(item.username || '')}">`;
       html += `<label class="field-label">Password</label><input type="password" id="editPass" class="field-input" value="${esc(item.password || '')}">`;
       html += `<label class="field-label">TOTP Secret (optional)</label><input type="text" id="editTotp" class="field-input" value="${esc(item.totp_secret || '')}">`;
@@ -951,6 +1038,19 @@
     
     document.getElementById('btnSaveEdit').addEventListener('click', () => saveEditItem(id, type));
     
+    if (type === 'login') {
+      const urlInput = document.getElementById('editUrl');
+      if (urlInput) {
+        urlInput.addEventListener('input', () => {
+          const parsed = parseWebAddress(urlInput.value);
+          document.getElementById('editSubdomain').value = parsed.subdomain;
+          document.getElementById('editDomain').value = parsed.domain;
+          document.getElementById('editPort').value = parsed.port;
+          document.getElementById('editPath').value = parsed.path;
+        });
+      }
+    }
+
     const browseBtn = document.getElementById('btnBrowseExeEdit');
     if (browseBtn) browseBtn.addEventListener('click', async () => {
       try { const path = await invoke('pick_executable'); if (path) document.getElementById('editExePath').value = path; } catch {}
@@ -962,6 +1062,10 @@
     const data = { title: document.getElementById('editTitle')?.value || '', notes: document.getElementById('editNotes')?.value || '' };
     if (type === 'login') {
       data.url = document.getElementById('editUrl')?.value || '';
+      data.subdomain = document.getElementById('editSubdomain')?.value || '';
+      data.domain = document.getElementById('editDomain')?.value || '';
+      data.port = document.getElementById('editPort')?.value || '';
+      data.path = document.getElementById('editPath')?.value || '';
       data.username = document.getElementById('editUser')?.value || '';
       data.password = document.getElementById('editPass')?.value || '';
       data.totp_secret = document.getElementById('editTotp')?.value || '';
@@ -1161,6 +1265,43 @@
       host = host.substring(4);
     }
     return host.toLowerCase().trim();
+  }
+
+  function parseWebAddress(urlString) {
+    if (!urlString) return { domain: '', subdomain: '', port: '', path: '' };
+    let tempUrl = urlString.trim();
+    if (!/^https?:\/\//i.test(tempUrl)) {
+      tempUrl = 'http://' + tempUrl;
+    }
+    try {
+      const parsed = new URL(tempUrl);
+      const hostname = parsed.hostname;
+      const port = parsed.port;
+      let path = parsed.pathname;
+      if (path === '/') path = '';
+      path += parsed.search + parsed.hash;
+      
+      const parts = hostname.split('.');
+      let domain = hostname;
+      let subdomain = '';
+      const secondLevelTlds = ['com', 'co', 'org', 'net', 'gov', 'edu', 'ac', 'or', 'mil'];
+      
+      if (parts.length > 2) {
+        const penultimate = parts[parts.length - 2].toLowerCase();
+        const isSecondLevel = secondLevelTlds.includes(penultimate);
+        if (isSecondLevel && parts.length >= 3) {
+          domain = parts.slice(-3).join('.');
+        } else {
+          domain = parts.slice(-2).join('.');
+        }
+        if (hostname !== domain) {
+          subdomain = hostname;
+        }
+      }
+      return { domain, subdomain, port, path };
+    } catch (e) {
+      return { domain: '', subdomain: '', port: '', path: '' };
+    }
   }
 
   // ===== Modal close =====
