@@ -762,7 +762,7 @@ pub fn run() {
                             let state = app_handle.state::<AppState>();
                             if let Ok(mut guard) = state.last_active_app.lock() {
                                 *guard = Some(info);
-                            }
+                            };
                         }
                     }
                 }
