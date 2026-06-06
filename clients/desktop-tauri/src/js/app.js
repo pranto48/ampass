@@ -491,7 +491,7 @@
     if (item._type === 'login' && item.url) {
       const domain = extractDomain(item.url);
       if (domain) {
-        icon = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:20px; height:20px; border-radius:4px; object-fit:contain; display:block;" onerror="this.outerHTML='🌐'">`;
+        icon = `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" alt="" style="width:20px; height:20px; border-radius:4px; object-fit:contain; display:block;" onerror="this.outerHTML='<span>🌐</span>'">`;
       }
     }
     let subtitle = item.username || item.email || '';
@@ -1146,6 +1146,23 @@
   function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000); }
 
+  function extractDomain(url) {
+    if (!url) return '';
+    let host = url;
+    try {
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      host = new URL(url).hostname;
+    } catch (e) {
+      // Keep as is
+    }
+    if (host.startsWith('www.')) {
+      host = host.substring(4);
+    }
+    return host.toLowerCase().trim();
+  }
+
   // ===== Modal close =====
   document.getElementById('modalClose').addEventListener('click', () => document.getElementById('itemModal').style.display = 'none');
 
@@ -1457,22 +1474,7 @@
       return rows;
     }
 
-    function extractDomain(url) {
-      if (!url) return '';
-      let host = url;
-      try {
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-          url = 'https://' + url;
-        }
-        host = new URL(url).hostname;
-      } catch (e) {
-        // Keep as is
-      }
-      if (host.startsWith('www.')) {
-        host = host.substring(4);
-      }
-      return host.toLowerCase().trim();
-    }
+
 
     function estimateStrength(pw) {
       if (!pw) return 0;
