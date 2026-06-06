@@ -866,7 +866,7 @@ fn get_active_app_windows() -> Result<ActiveAppInfo, String> {
 
         // Get Executable Path
         let mut path_buf = [0u16; 1024];
-        let mut path_len = 1024u32;
+        let path_len = 1024u32;
         let mut exe_path = String::new();
         let res = GetModuleFileNameExW(process_handle, 0, path_buf.as_mut_ptr(), path_len);
         if res > 0 {
