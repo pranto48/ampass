@@ -259,8 +259,10 @@
     const allItemsList = document.getElementById('allItemsList');
     const itemCount = document.getElementById('itemCount');
     const emptyState = document.getElementById('emptyState');
+    const allItemsSection = document.getElementById('allItemsSection');
 
     isOnCurrentSite = false;
+    if (allItemsSection) allItemsSection.style.display = 'none';
 
     if (currentUrl && currentUrl.startsWith('http')) {
       const matchResult = await sendMsg('GET_MATCHES', { url: currentUrl });
@@ -269,19 +271,26 @@
         matchesSection.style.display = 'block';
         renderItems(matchesList, matchResult.items, true);
       } else {
-        matchesSection.style.display = 'none';
+        matchesSection.style.display = 'block';
+        matchesList.innerHTML = `<div class="empty-state" style="padding: 20px 10px; text-align: center; border: 1px dashed rgba(255,255,255,0.08); border-radius: 8px; margin: 10px 0;">
+          <p style="margin: 0; opacity: 0.6; font-size: 12px; color: var(--text-muted);">No matching logins found for this website.</p>
+        </div>`;
       }
+    } else {
+      matchesSection.style.display = 'block';
+      matchesList.innerHTML = `<div class="empty-state" style="padding: 20px 10px; text-align: center; border: 1px dashed rgba(255,255,255,0.08); border-radius: 8px; margin: 10px 0;">
+        <p style="margin: 0; opacity: 0.6; font-size: 12px; color: var(--text-muted);">Open a website to see matching logins.</p>
+      </div>`;
     }
 
     const allResult = await sendMsg('GET_ALL_ITEMS');
     if (allResult.success) {
       itemCount.textContent = allResult.items.length;
-      if (allResult.items.length > 0) {
-        renderItems(allItemsList, allResult.items, false);
-        emptyState.style.display = 'none';
-      } else {
-        allItemsList.innerHTML = '';
+      if (allResult.items.length === 0) {
+        matchesSection.style.display = 'none';
         emptyState.style.display = 'block';
+      } else {
+        emptyState.style.display = 'none';
       }
     }
   }
@@ -788,10 +797,19 @@
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(async () => {
       const query = document.getElementById('searchInput').value.trim();
-      if (!query) { await loadVault(); return; }
+      if (!query) {
+        if (document.getElementById('allItemsSection')) {
+          document.getElementById('allItemsSection').style.display = 'none';
+        }
+        await loadVault();
+        return;
+      }
       const result = await sendMsg('SEARCH', { query });
       if (result.success) {
         document.getElementById('matchesSection').style.display = 'none';
+        if (document.getElementById('allItemsSection')) {
+          document.getElementById('allItemsSection').style.display = 'block';
+        }
         renderItems(document.getElementById('allItemsList'), result.items, false);
         document.getElementById('itemCount').textContent = result.items.length;
       }

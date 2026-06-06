@@ -677,7 +677,15 @@ class AdminController {
             case 'reset-installed': $this->updatesResetInstalled(); return;
         }
 
+        $cronKey = UpdateService::getSetting('auto_update_cron_key', '');
+        if (empty($cronKey)) {
+            $cronKey = bin2hex(random_bytes(16));
+            UpdateService::saveSetting('auto_update_cron_key', $cronKey);
+        }
+
         $data = [
+            'auto_update_enabled' => UpdateService::getSetting('auto_update_enabled', '0') === '1',
+            'auto_update_cron_key' => $cronKey,
             'current_version' => UpdateService::getInstalledVersion(),
             'installed_sha' => defined('AMPASS_COMMIT_SHA') ? AMPASS_COMMIT_SHA : UpdateService::getSetting('installed_commit_sha', ''),
             'installed_version_display' => defined('AMPASS_VERSION_DISPLAY') ? AMPASS_VERSION_DISPLAY : UpdateService::getSetting('installed_version_display', ''),
@@ -814,6 +822,15 @@ class AdminController {
             }
         } elseif (isset($_POST['github_token_clear']) && $_POST['github_token_clear'] === '1') {
             UpdateService::saveSetting('github_token_encrypted', '');
+        }
+
+        // Save auto-update settings
+        $autoUpdateEnabled = isset($_POST['auto_update_enabled']) && $_POST['auto_update_enabled'] === '1' ? '1' : '0';
+        UpdateService::saveSetting('auto_update_enabled', $autoUpdateEnabled);
+
+        $cronKey = trim($_POST['auto_update_cron_key'] ?? '');
+        if (!empty($cronKey)) {
+            UpdateService::saveSetting('auto_update_cron_key', preg_replace('/[^a-zA-Z0-9]/', '', $cronKey));
         }
 
         // Reset update check state when settings change

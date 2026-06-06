@@ -988,4 +988,70 @@ class ExtensionApiController {
             echo json_encode(['error' => 'Device not found']);
         }
     }
+
+    /**
+     * GET /api/extension/cronUpdate
+     * Trigger automatic updates from GitHub (designed for cPanel cron).
+     * Query param: ?key=YOUR_CRON_KEY
+     */
+    public function cronUpdate(): void {
+        require_once __DIR__ . '/../../services/UpdateService.php';
+        require_once __DIR__ . '/../../services/BackupService.php';
+
+        $keyInput = $_GET['key'] ?? '';
+        $storedKey = UpdateService::getSetting('auto_update_cron_key', '');
+
+        if (empty($storedKey) || $keyInput !== $storedKey) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Invalid or missing cron key']);
+            return;
+        }
+
+        $enabled = UpdateService::getSetting('auto_update_enabled', '0') === '1';
+        if (!$enabled) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Auto-update is disabled in settings']);
+            return;
+        }
+
+        // 1. Check preflight blockers
+        if (UpdateService::hasPreflightBlockers()) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Auto-update blocked: preflight checks failed']);
+            return;
+        }
+
+        // 2. Check for updates
+        $check = UpdateService::checkForUpdates();
+        if (!empty($check['error'])) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Update check failed: ' . $check['error']]);
+            return;
+        }
+
+        if (!$check['update_available']) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'AMPass is already up to date',
+                'version' => UpdateService::getInstalledVersionDisplay()
+            ]);
+            return;
+        }
+
+        // 3. Apply update
+        $backupPassword = 'auto-' . bin2hex(random_bytes(8));
+        $result = UpdateService::applyUpdate($backupPassword, 1);
+
+        if ($result['success']) {
+            $sync = UpdateService::syncVersionFromGitHub();
+            echo json_encode([
+                'success' => true,
+                'message' => 'AMPass successfully updated to ' . ($sync['display'] ?? 'latest'),
+                'files_updated' => $result['files_updated'] ?? 0
+            ]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Update failed: ' . ($result['error'] ?? 'Unknown error')]);
+        }
+    }
 }

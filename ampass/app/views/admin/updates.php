@@ -490,9 +490,36 @@ if (empty($latestDisplay) && !empty($latestSha)) {
                 <div class="form-group"><label class="form-label">Branch</label><input type="text" name="github_branch" class="form-input" value="<?= htmlspecialchars($data['github_branch']) ?>"></div>
                 <div class="form-group">
                     <label class="form-label">GitHub Token (optional — raises API rate limit)</label>
-                    <input type="password" name="github_token" class="form-input" placeholder="<?= $data['github_token_set'] ? '••••••••' : 'ghp_...' ?>">
+                    <input type="password" name="github_token" class="input form-input" placeholder="<?= $data['github_token_set'] ? '••••••••' : 'ghp_...' ?>">
                     <?php if ($data['github_token_set']): ?><label class="checkbox-label" style="margin-top:4px;"><input type="checkbox" name="github_token_clear" value="1"> Remove token</label><?php endif; ?>
                 </div>
+
+                <div class="form-group" style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.08); padding-top:16px;">
+                    <label class="form-label">Enable Automatic Updates (cPanel Cron)</label>
+                    <select name="auto_update_enabled" class="form-select">
+                        <option value="0" <?= !$data['auto_update_enabled'] ? 'selected' : '' ?>>Disabled</option>
+                        <option value="1" <?= $data['auto_update_enabled'] ? 'selected' : '' ?>>Enabled</option>
+                    </select>
+                    <p class="text-muted" style="font-size:0.75rem;margin-top:4px;color:#71717a;">When enabled, AMPass will automatically check for and install updates from GitHub every hour.</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Auto-Update Cron Key</label>
+                    <input type="text" name="auto_update_cron_key" class="form-input" value="<?= htmlspecialchars($data['auto_update_cron_key']) ?>" required pattern="[a-zA-Z0-9]+">
+                    <p class="text-muted" style="font-size:0.75rem;margin-top:4px;color:#71717a;">Used to authenticate automatic update triggers via web URL. Alphanumeric characters only.</p>
+                </div>
+
+                <?php if ($data['auto_update_enabled']): ?>
+                <div style="background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); border-radius:6px; padding:12px; font-size:0.8rem; margin-bottom:16px; color:#e0e7ff;">
+                    <strong style="color:#a5b4fc;">cPanel Cron Setup:</strong> Add a Cron Job in cPanel to run once per hour (e.g. at minute 0).
+                    <br><br>
+                    <strong>Option A (CLI - Recommended):</strong>
+                    <pre style="background:rgba(0,0,0,0.3); padding:8px; border-radius:4px; overflow-x:auto; color:#818cf8; margin:6px 0; font-family:monospace; font-size:0.75rem;">0 * * * * php <?= htmlspecialchars(realpath(__DIR__ . '/../../../scripts/cron-update.php')) ?></pre>
+                    <strong>Option B (Web URL):</strong>
+                    <pre style="background:rgba(0,0,0,0.3); padding:8px; border-radius:4px; overflow-x:auto; color:#818cf8; margin:6px 0; font-family:monospace; font-size:0.75rem;">0 * * * * curl -s "<?= APP_URL ?>/api/extension/cronUpdate?key=<?= htmlspecialchars($data['auto_update_cron_key']) ?>"</pre>
+                </div>
+                <?php endif; ?>
+
                 <button type="submit" class="btn btn-primary">Save Settings</button>
             </form>
         </div></div>
