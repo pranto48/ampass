@@ -1504,14 +1504,23 @@
           return;
         }
         
-        // Filter decrypted items of type 'app_account' or 'login' that match activeApp
+        // Filter decrypted items of type 'app_account', 'login' or 'remote_desktop' that match activeApp
         const matching = allDecrypted.filter(item => {
-          if (item._type !== 'app_account' && item._type !== 'login') return false;
+          if (item._type !== 'app_account' && item._type !== 'login' && item._type !== 'remote_desktop') return false;
           
           const appName = (item.application_name || item.title || '').toLowerCase();
           const exePath = (item.executable_path || item.url || '').toLowerCase();
           const activeName = activeApp.name.toLowerCase();
           const activeExe = activeApp.executable_path.toLowerCase();
+          const activeTitle = (activeApp.title || '').toLowerCase();
+          
+          // Special case for Remote Desktop
+          if (item._type === 'remote_desktop') {
+            if (activeExe.endsWith('mstsc.exe') || activeName.includes('remote desktop')) {
+              // Always show RDP items if the Remote Desktop client is the active app
+              return true;
+            }
+          }
           
           // Exact match on executable path filename
           if (exePath && (activeExe.endsWith(exePath) || exePath.endsWith(activeExe))) {
@@ -1537,6 +1546,8 @@
           listEl.innerHTML = matching.map(i => {
             if (i._type === 'app_account') {
               return appAccountRow(i);
+            } else if (i._type === 'remote_desktop') {
+              return rdpRow(i);
             } else {
               return itemRow(i);
             }
