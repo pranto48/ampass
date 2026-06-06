@@ -5,23 +5,81 @@
 (function() {
   'use strict';
 
-  // ===== Tauri Availability Check =====
-  if (!window.__TAURI__ || !window.__TAURI__.core) {
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('app').innerHTML = `
-        <div class="auth-screen" style="display:flex;">
-          <div class="auth-card">
-            <h2 class="auth-title">AMPass Desktop</h2>
-            <p class="auth-sub">This application requires the Tauri desktop runtime.</p>
-            <p style="font-size:12px;color:#64748b;margin-top:12px;">To run in development:<br><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">cargo tauri dev</code></p>
-          </div>
-        </div>`;
-    });
-    return; // Stop execution — not in Tauri
-  }
+  // ===== Tauri Compatibility Polyfill for Web/Browser Mode =====
+  let invoke = null;
+  let listen = null;
 
-  const { invoke } = window.__TAURI__.core;
-  const { listen } = window.__TAURI__.event;
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    invoke = window.__TAURI__.core.invoke;
+    listen = window.__TAURI__.event.listen;
+  } else {
+    // We are in Web Browser mode (e.g. GitHub Pages)
+    listen = function(event, callback) {
+      // No-op for events
+      return () => {};
+    };
+    
+    invoke = async function(cmd, args = {}) {
+      switch (cmd) {
+        case 'set_server_url':
+          localStorage.setItem('server_url', args.url || '');
+          return;
+        case 'get_app_state':
+          const server_url = localStorage.getItem('server_url') || '';
+          const token = localStorage.getItem('auth_token') || '';
+          return {
+            configured: !!server_url,
+            server_url: server_url,
+            authenticated: !!token,
+            locked: true
+          };
+        case 'store_auth_token':
+          localStorage.setItem('auth_token', args.token || '');
+          return;
+        case 'get_auth_token':
+          return localStorage.getItem('auth_token') || '';
+        case 'store_derivation_params':
+          localStorage.setItem('derivation_params', args.paramsJson || '');
+          return;
+        case 'load_derivation_params':
+          return localStorage.getItem('derivation_params') || '';
+        case 'clear_derivation_params':
+          localStorage.removeItem('derivation_params');
+          return;
+        case 'save_user_summary':
+          localStorage.setItem('user_summary', args.userJson || '');
+          return;
+        case 'load_user_summary':
+          return localStorage.getItem('user_summary') || '';
+        case 'clear_trusted_pc':
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('derivation_params');
+          localStorage.removeItem('user_summary');
+          localStorage.removeItem('vault_cache');
+          return;
+        case 'save_vault_cache':
+          localStorage.setItem('vault_cache', args.encryptedItemsJson || '');
+          return;
+        case 'load_vault_cache':
+          return localStorage.getItem('vault_cache') || '';
+        case 'get_app_version':
+          return '1.107.0';
+        case 'unlock_vault':
+        case 'lock_vault':
+        case 'record_activity':
+          return;
+        case 'pick_executable':
+          return '';
+        case 'launch_application':
+          throw new Error('Launching applications is only supported on the Desktop App');
+        case 'get_detected_app':
+          return null;
+        default:
+          console.warn('Unhandled mock Tauri command:', cmd);
+          return null;
+      }
+    };
+  }
 
   let vaultKeyHex = null;
   let vaultItems = [];
@@ -107,11 +165,7 @@
 
   // ===== Init =====
   async function init() {
-    // Check if Tauri is available (won't be in browser preview)
-    if (!window.__TAURI__) {
-      document.getElementById('app').innerHTML = '<div class="auth-screen"><div class="auth-card"><h2>AMPass Desktop</h2><p class="auth-sub">This app requires the Tauri desktop runtime.<br>Please launch via <code>cargo tauri dev</code>.</p></div></div>';
-      return;
-    }
+    // Tauri checked by compatibility polyfill at startup
     try {
       // Load and display version
       try {
