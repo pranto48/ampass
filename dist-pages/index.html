@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMPass</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===== AUTH SCREENS ===== -->
+    <div id="viewWelcome" class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <svg width="56" height="56" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="url(#lg)"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/><defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#4338ca"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs></svg>
+        </div>
+        <h1 class="auth-title">AMPass</h1>
+        <p class="auth-sub">Secure Password Manager</p>
+        <div class="auth-form">
+          <label class="field-label">Server URL</label>
+          <input type="url" id="welcomeUrl" class="field-input" placeholder="https://yourdomain.com/ampass">
+          <p class="field-hint">Enter your AMPass server address</p>
+          <button id="btnConnect" class="btn-primary">Connect</button>
+        </div>
+        <p class="auth-warning">⚠️ Not professionally audited. Do not use for real credentials.</p>
+      </div>
+    </div>
+
+    <div id="viewLogin" class="auth-screen" style="display:none;">
+      <div class="auth-card">
+        <div class="auth-logo"><svg width="40" height="40" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="url(#lg2)"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/><defs><linearGradient id="lg2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#4338ca"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs></svg></div>
+        <h2 class="auth-title">Sign In</h2>
+        <p id="loginServerInfo" class="field-hint" style="text-align:center;margin-bottom:8px;font-size:11px;color:#64748b;"></p>
+        <div class="auth-form">
+          <label class="field-label">Username or Email</label>
+          <input type="text" id="loginUser" class="field-input" autocomplete="off">
+          <label class="field-label">Password</label>
+          <input type="password" id="loginPass" class="field-input" autocomplete="off">
+          <label class="checkbox-label" style="margin:8px 0;font-size:12px;"><input type="checkbox" id="loginTrustPC" checked> Trust this PC (stay signed in)</label>
+          <div id="login2faContainer" style="display:none; margin-top:8px; margin-bottom:8px;">
+            <label class="field-label">2FA Code</label>
+            <input type="text" id="login2faCode" class="field-input" placeholder="Google Authenticator code" maxlength="6" inputmode="numeric" pattern="[0-9]*">
+          </div>
+          <button id="btnLogin" class="btn-primary">Sign In</button>
+          <div id="loginErr" class="field-error"></div>
+          <button id="btnLoginChangeServer" class="btn-ghost-sm" style="margin-top:8px;font-size:11px;width:100%;">Change Server</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewUnlock" class="auth-screen" style="display:none;">
+      <div class="auth-card">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <h2 class="auth-title">Unlock Vault</h2>
+        <p id="unlockTrustInfo" class="field-hint" style="text-align:center;font-size:11px;color:#64748b;margin-bottom:8px;"></p>
+        <div class="auth-form">
+          <label class="field-label">Master Password</label>
+          <input type="password" id="unlockPass" class="field-input" autocomplete="off">
+          <button id="btnUnlock" class="btn-primary">Unlock</button>
+          <div id="unlockErr" class="field-error"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+            <button id="btnUnlockSignOut" class="btn-ghost-sm" style="font-size:11px;">Sign Out</button>
+            <button id="btnUnlockChangeServer" class="btn-ghost-sm" style="font-size:11px;">Change Server</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MAIN APP LAYOUT ===== -->
+    <div id="viewMain" class="main-layout" style="display:none;">
+      <!-- Left Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="white" fill-opacity="0.15"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg>
+          <span>AMPass</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav">
+          <a href="#" class="nav-link active" data-page="quickAccess"><span class="nav-icon">⚡</span>Quick Access</a>
+          <a href="#" class="nav-link" data-page="webAccounts"><span class="nav-icon">🌐</span>Web Accounts</a>
+          <a href="#" class="nav-link" data-page="appAccounts"><span class="nav-icon">💻</span>App Accounts</a>
+          <a href="#" class="nav-link" data-page="remoteDesktop"><span class="nav-icon">🖥️</span>Remote Desktop</a>
+          <a href="#" class="nav-link" data-page="identities"><span class="nav-icon">👤</span>Identities</a>
+          <a href="#" class="nav-link" data-page="bookmarks"><span class="nav-icon">🔖</span>Bookmarks</a>
+          <a href="#" class="nav-link" data-page="secureMemos"><span class="nav-icon">📝</span>Secure Memos</a>
+          <div class="nav-divider"></div>
+          <a href="#" class="nav-link" data-page="sharing"><span class="nav-icon">🤝</span>Sharing Center</a>
+          <a href="#" class="nav-link" data-page="security"><span class="nav-icon">🛡️</span>Security Dashboard</a>
+          <a href="#" class="nav-link" data-page="generator"><span class="nav-icon">🔑</span>Password Generator</a>
+          <a href="#" class="nav-link" data-page="importData"><span class="nav-icon">📥</span>Import Data</a>
+          <div class="nav-divider"></div>
+          <a href="#" class="nav-link" data-page="settings"><span class="nav-icon">⚙️</span>Settings</a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="sync-status">
+            <span class="sync-icon" id="syncIcon">☁️</span>
+            <div class="sync-info">
+              <span class="sync-label">Synced</span>
+              <span class="sync-time" id="syncTime">Just now</span>
+            </div>
+          </div>
+          <button id="btnSyncNow" class="btn-ghost-sm" title="Sync now">↻</button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="content">
+        <!-- Top Bar -->
+        <header class="topbar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" class="search-input" placeholder="Search vault...">
+          </div>
+          <div class="topbar-actions">
+            <button id="btnLockVault" class="btn-ghost-sm" title="Lock vault">🔒</button>
+            <button id="btnUserMenu" class="btn-ghost-sm" title="Account">👤</button>
+          </div>
+        </header>
+
+        <!-- Page Content Area -->
+        <div class="page-area" id="pageArea">
+          <!-- Quick Access (default) -->
+          <div id="pageQuickAccess" class="page active">
+            <div class="page-header">
+              <h1>Quick Access</h1>
+              <div class="page-actions">
+                <button class="btn-sm btn-add" id="btnAddItem">+ Add Account</button>
+              </div>
+            </div>
+            <div class="quick-cards">
+              <div class="qcard"><span class="qcard-num" id="statTotal">0</span><span class="qcard-label">Total Items</span></div>
+              <div class="qcard"><span class="qcard-num" id="statFavorites">0</span><span class="qcard-label">Favorites</span></div>
+              <div class="qcard"><span class="qcard-num" id="statWeak">0</span><span class="qcard-label">Weak</span></div>
+              <div class="qcard"><span class="qcard-num" id="statScore">—</span><span class="qcard-label">Score</span></div>
+            </div>
+            <!-- Suggested logins for active application -->
+            <div id="detectedAppSection" class="detected-app-section" style="display:none; margin-bottom: 20px; background: rgba(99, 102, 241, 0.06); padding: 16px; border: 1px dashed rgba(99, 102, 241, 0.2); border-radius: 8px;">
+              <h3 class="section-title" style="margin-top:0; color:#818cf8; display:flex; align-items:center; gap:6px;">
+                <span>💡 Suggested for:</span>
+                <span id="detectedAppName" style="font-weight:700; color:#fafafa;"></span>
+              </h3>
+              <div id="detectedAppList" class="item-table"></div>
+            </div>
+
+            <h3 class="section-title">Recently Used</h3>
+            <div id="recentList" class="item-table"></div>
+            <h3 class="section-title">Favorites</h3>
+            <div id="favoritesList" class="item-table"></div>
+          </div>
+
+          <!-- Web Accounts -->
+          <div id="pageWebAccounts" class="page">
+            <div class="page-header"><h1>Web Accounts</h1><button class="btn-sm btn-add" data-add="login">+ Add</button></div>
+            <div id="webAccountsList" class="item-table"></div>
+          </div>
+
+          <!-- App Accounts -->
+          <div id="pageAppAccounts" class="page">
+            <div class="page-header">
+              <h1>App Accounts</h1>
+              <div class="page-actions">
+                <button class="btn-sm btn-add" data-add="app_account">+ Add Account</button>
+              </div>
+            </div>
+            <div id="appAccountsList" class="item-table"></div>
+            <div class="page-footer-hint">
+              <p>💡 Select an Application to create a new Account. Suggested: Microsoft Outlook, Zoom, Microsoft Teams, Slack, Remote Desktop Connection.</p>
+              <p class="text-muted">Use AMPass Desktop to launch apps and copy credentials securely. Passwords are never passed via command line.</p>
+            </div>
+          </div>
+
+          <!-- Remote Desktop -->
+          <div id="pageRemoteDesktop" class="page">
+            <div class="page-header">
+              <h1>Remote Desktop</h1>
+              <div class="page-actions">
+                <button class="btn-sm btn-add" data-add="remote_desktop">+ Add RDP Account</button>
+              </div>
+            </div>
+            <div id="remoteDesktopList" class="item-table"></div>
+            <div class="page-footer-hint">
+              <p>💡 Open RDP creates a temporary .rdp file (without password). Copy password manually and paste when prompted.</p>
+              <p class="text-muted">Clipboard auto-clears after configured timeout. Temporary .rdp files are deleted after launch.</p>
+            </div>
+          </div>
+
+          <!-- Identities -->
+          <div id="pageIdentities" class="page">
+            <div class="page-header"><h1>Identities</h1><button class="btn-sm btn-add" data-add="identity">+ Add</button></div>
+            <div id="identitiesList" class="item-table"></div>
+          </div>
+
+          <!-- Secure Memos -->
+          <div id="pageSecureMemos" class="page">
+            <div class="page-header"><h1>Secure Memos</h1><button class="btn-sm btn-add" data-add="secure_note">+ Add</button></div>
+            <div id="memosList" class="item-table"></div>
+          </div>
+
+          <!-- Password Generator -->
+          <div id="pageGenerator" class="page">
+            <div class="page-header"><h1>Password Generator</h1></div>
+            <div class="gen-panel">
+              <div class="gen-output-box">
+                <input type="text" id="genPw" class="gen-pw-field" readonly>
+                <button id="btnCopyGen" class="btn-ghost-sm">📋 Copy</button>
+                <button id="btnRegenerate" class="btn-ghost-sm">🔄</button>
+              </div>
+              <div class="gen-strength-bar"><div id="genStrFill" class="gen-str-fill"></div></div>
+              <div class="gen-controls">
+                <div class="gen-row"><label>Length</label><input type="range" id="genLen" min="8" max="64" value="20"><span id="genLenVal">20</span></div>
+                <label class="gen-check"><input type="checkbox" id="genUpper" checked>Uppercase (A-Z)</label>
+                <label class="gen-check"><input type="checkbox" id="genLower" checked>Lowercase (a-z)</label>
+                <label class="gen-check"><input type="checkbox" id="genNums" checked>Numbers (0-9)</label>
+                <label class="gen-check"><input type="checkbox" id="genSyms" checked>Symbols (!@#$%)</label>
+              </div>
+              <button id="btnSaveGenerated" class="btn-primary" style="margin-top:12px;">Save as New Item</button>
+            </div>
+          </div>
+
+          <!-- Settings -->
+          <div id="pageSettings" class="page">
+            <div class="page-header"><h1>Settings</h1></div>
+            <div class="settings-list">
+              <div class="setting-group"><h3>Connection</h3><p id="settingUrl" class="setting-val">—</p></div>
+              <div class="setting-group"><h3>Security</h3>
+                <label class="setting-row">Lock timeout (min)<input type="number" id="setLockMin" value="15" min="1" max="120" class="setting-input"></label>
+                <label class="setting-row">Clipboard clear (sec)<input type="number" id="setClipSec" value="30" min="5" max="300" class="setting-input"></label>
+              </div>
+              <div class="setting-group"><h3>Data</h3>
+                <button id="btnExportBackup" class="btn-ghost">Export Encrypted Backup</button>
+                <button id="btnWipeCache" class="btn-danger-sm">Wipe Local Cache</button>
+              </div>
+              <div class="setting-group"><h3>Account</h3>
+                <button id="btnLogout" class="btn-ghost">Logout & Disconnect</button>
+              </div>
+              <div class="setting-group">
+                <h3>About</h3>
+                <p class="setting-val">AMPass Desktop <span id="aboutVersion">v1.107.0</span></p>
+                <div class="security-warning-box" style="margin-top: 8px; padding: 10px; border: 1px solid #ea580c; background-color: rgba(234, 88, 12, 0.08); border-radius: 6px; font-size: 0.8rem; color: #f97316; line-height: 1.4;">
+                  <strong>⚠️ Security Notice:</strong> This software has not been professionally audited by any security firm or cryptographer. All encryption is client-side, but it is recommended only for development or non-critical personal environments. Use at your own risk.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security Dashboard -->
+          <div id="pageSecurity" class="page">
+            <div class="page-header"><h1>Security Dashboard</h1></div>
+            <div class="quick-cards">
+              <div class="qcard qcard-green"><span class="qcard-num" id="secScore">—</span><span class="qcard-label">Security Score</span></div>
+              <div class="qcard qcard-yellow"><span class="qcard-num" id="secWeak">0</span><span class="qcard-label">Weak Passwords</span></div>
+              <div class="qcard qcard-red"><span class="qcard-num" id="secReused">0</span><span class="qcard-label">Reused</span></div>
+            </div>
+            <p class="empty-hint">Detailed security analysis coming in a future update.</p>
+          </div>
+
+          <!-- Sharing / Bookmarks -->
+          <div id="pageSharing" class="page">
+            <div class="page-header"><h1>Sharing Center</h1></div>
+            <div id="sharingList" class="item-table"><p class="empty-hint">Loading shared items...</p></div>
+          </div>
+          <div id="pageBookmarks" class="page">
+            <div class="page-header"><h1>Bookmarks</h1></div>
+            <p style="font-size:12px;color:#64748b;padding:0 20px 8px;">Favorited web accounts appear here as quick-access bookmarks.</p>
+            <div id="bookmarksList" class="item-table"><p class="empty-hint">No bookmarks yet.</p></div>
+          </div>
+
+          <!-- Import Data -->
+          <div id="pageImportData" class="page">
+            <div class="page-header"><h1>Import Data</h1></div>
+            <div class="import-panel" style="padding:0 20px;">
+              <div class="alert-warning" style="background:#332b00;border:1px solid #665500;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;color:#fcd34d;">
+                ⚠️ <strong>Security:</strong> Exported password files contain plaintext passwords. Import only on a trusted computer. Delete the file after importing.
+              </div>
+
+              <div style="margin-bottom:12px;">
+                <label class="field-label">Import Source</label>
+                <select id="importSource" class="field-input" style="padding:8px 12px;">
+                  <option value="">Choose source...</option>
+                  <option value="sticky_password">Sticky Password (TXT)</option>
+                  <option value="lastpass">LastPass (CSV)</option>
+                  <option value="bitwarden">Bitwarden (CSV)</option>
+                  <option value="1password">1Password (CSV)</option>
+                  <option value="keepass">KeePass (CSV)</option>
+                  <option value="chrome">Google Chrome (CSV)</option>
+                  <option value="edge">Microsoft Edge (CSV)</option>
+                  <option value="brave">Brave (CSV)</option>
+                  <option value="firefox">Firefox (CSV)</option>
+                  <option value="generic_csv">Generic CSV</option>
+                </select>
+              </div>
+
+              <div style="margin-bottom:12px;">
+                <button id="btnImportFile" class="btn-ghost" disabled>📁 Select File...</button>
+                <span id="importFileName" style="margin-left:8px;font-size:0.8rem;color:#94a3b8;"></span>
+              </div>
+
+              <!-- Preview Table -->
+              <div id="importPreviewArea" style="display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <h3 style="margin:0;">Preview (<span id="importPreviewCount">0</span> items)</h3>
+                  <div style="display:flex;gap:6px;">
+                    <button id="btnImportSelectAll" class="btn-ghost-sm">Select All</button>
+                    <button id="btnImportUnselectAll" class="btn-ghost-sm">Unselect All</button>
+                  </div>
+                </div>
+                <div style="max-height:300px;overflow-y:auto;border:1px solid #27272a;border-radius:8px;">
+                  <table class="data-table" style="width:100%;font-size:0.78rem;">
+                    <thead><tr><th style="width:28px;"><input type="checkbox" id="importCheckAll" checked></th><th>Title</th><th>URL</th><th>Username</th><th>Password</th></tr></thead>
+                    <tbody id="importPreviewBody"></tbody>
+                  </table>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px;">
+                  <button id="btnImportStart" class="btn-primary" disabled>Import Selected</button>
+                  <button id="btnImportCancel" class="btn-ghost-sm">Cancel</button>
+                </div>
+              </div>
+
+              <!-- Progress -->
+              <div id="importProgressArea" style="display:none;margin-top:12px;">
+                <div style="background:#27272a;border-radius:6px;height:8px;overflow:hidden;">
+                  <div id="importProgressBar" style="background:#6366f1;height:100%;width:0%;transition:width 0.3s;"></div>
+                </div>
+                <p id="importProgressText" style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Importing...</p>
+              </div>
+
+              <!-- Result -->
+              <div id="importResultArea" style="display:none;margin-top:12px;">
+                <div id="importResultContent" style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:14px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Action Bar -->
+        <footer class="bottom-bar">
+          <div class="bottom-actions">
+            <button class="bottom-btn" data-add="login">+ Add Account</button>
+            <button class="bottom-btn" data-add="identity">+ Add Identity</button>
+            <button class="bottom-btn" data-add="secure_note">+ Add Memo</button>
+          </div>
+          <div class="bottom-right">
+            <span class="bottom-link" id="bottomAccount">My AMPass Account</span>
+          </div>
+        </footer>
+      </main>
+    </div>
+
+    <!-- Item Detail Modal -->
+    <div id="itemModal" class="modal-overlay" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="modalTitle">Item Details</h2>
+          <button id="modalClose" class="btn-ghost-sm">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer" id="modalFooter"></div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast" style="display:none;"></div>
+  </div>
+
+  <!-- Firebase SDK (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/crypto.js"></script>
+  <script src="js/api-client.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
