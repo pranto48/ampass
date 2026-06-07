@@ -229,6 +229,7 @@ const ApiClient = {
     const refreshToken = result.refreshToken;
     const uid = result.localId;
 
+    this.token = token;
     await Storage.setLocal('firebaseRefreshToken', refreshToken);
     await Storage.setLocal('firebaseUid', uid);
 
