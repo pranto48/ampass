@@ -239,13 +239,17 @@ const ApiClient = {
       derivationParams = this.fromFirestoreFields(doc.fields);
       derivationParams.needs_setup = false;
     } catch (e) {
-      derivationParams = {
-        needs_setup: true,
-        encryption_salt: '',
-        encrypted_vault_key: 'VAULT_NOT_INITIALIZED',
-        vault_key_iv: '',
-        key_iterations: 0
-      };
+      if (e.status === 404) {
+        derivationParams = {
+          needs_setup: true,
+          encryption_salt: '',
+          encrypted_vault_key: 'VAULT_NOT_INITIALIZED',
+          vault_key_iv: '',
+          key_iterations: 0
+        };
+      } else {
+        throw e;
+      }
     }
 
     return {

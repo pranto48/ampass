@@ -239,14 +239,17 @@ const Api = {
       const pResult = await this.derivationParams();
       derivationParams = pResult.params;
     } catch (e) {
-      // If not found, means first-time setup
-      derivationParams = {
-        needs_setup: true,
-        encryption_salt: '',
-        encrypted_vault_key: 'VAULT_NOT_INITIALIZED',
-        vault_key_iv: '',
-        key_iterations: 0
-      };
+      if (e.status === 404) {
+        derivationParams = {
+          needs_setup: true,
+          encryption_salt: '',
+          encrypted_vault_key: 'VAULT_NOT_INITIALIZED',
+          vault_key_iv: '',
+          key_iterations: 0
+        };
+      } else {
+        throw e;
+      }
     }
 
     return {
