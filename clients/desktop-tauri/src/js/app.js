@@ -178,8 +178,18 @@
       } catch (verErr) {
         console.warn("Failed to retrieve version:", verErr);
       }
-      const state = await invoke('get_app_state');
-      if (!state.configured) { showAuth('viewWelcome'); return; }
+      let state = await invoke('get_app_state');
+      if (!state.configured) {
+        if (!(window.__TAURI__ && window.__TAURI__.core)) {
+          const currentOrigin = window.location.origin;
+          await invoke('set_server_url', { url: currentOrigin });
+          Api.setServerUrl(currentOrigin);
+          state = await invoke('get_app_state');
+        } else {
+          showAuth('viewWelcome');
+          return;
+        }
+      }
       Api.setServerUrl(state.server_url);
       if (!state.authenticated) {
         // Show server info on login screen
@@ -233,6 +243,25 @@
   }
 
   // ===== Connect =====
+  // If running as a web page (GitHub Pages), pre-fill the API server URL.
+  // The static site at ampass.arif.bd cannot run PHP — the PHP server is separate.
+  (function prefillServerUrl() {
+    const input = document.getElementById('welcomeUrl');
+    if (!input) return;
+    const saved = localStorage.getItem('server_url') || '';
+    if (saved) {
+      input.value = saved;
+    } else if (window.__TAURI__) {
+      // Tauri: leave blank, user must enter
+    } else {
+      // Web browser mode: the user's PHP server is at the same domain
+      // (if cPanel serves both the vault and the API at the same host).
+      // OR the user may be on GitHub Pages pointing to a different host.
+      // Suggest the current origin as a starting point — the user can change it.
+      input.value = window.location.origin;
+    }
+  })();
+
   document.getElementById('btnConnect').addEventListener('click', async () => {
     const url = document.getElementById('welcomeUrl').value.trim();
     if (!url) return;
