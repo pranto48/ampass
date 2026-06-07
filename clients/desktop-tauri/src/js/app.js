@@ -159,6 +159,62 @@
     });
   }
 
+  function initGoogleSignIn() {
+    if (window.__TAURI__) {
+      const gBtn = document.getElementById('googleBtn');
+      if (gBtn) gBtn.style.display = 'none';
+      return;
+    }
+
+    if (typeof google === 'undefined' || !google.accounts) {
+      setTimeout(initGoogleSignIn, 500);
+      return;
+    }
+    
+    try {
+      google.accounts.id.initialize({
+        client_id: '871705608594-uc23ekferb43dqo1bsjh255v1c02oj1o.apps.googleusercontent.com',
+        callback: handleGoogleLogin
+      });
+      google.accounts.id.renderButton(
+        document.getElementById('googleBtn'),
+        { theme: 'outline', size: 'large', width: 280, text: 'signin_with' }
+      );
+    } catch (e) {
+      console.warn('Google Sign-In initialization failed:', e);
+    }
+  }
+
+  async function handleGoogleLogin(response) {
+    if (!response || !response.credential) return;
+    document.getElementById('loginErr').textContent = '';
+    try {
+      const deviceId = localStorage.getItem('deviceId');
+      const result = await Api.loginWithGoogle(response.credential, deviceId);
+      
+      if (result.device_id) {
+        localStorage.setItem('deviceId', result.device_id);
+      }
+      
+      Api.token = result.token;
+      await invoke('store_auth_token', { token: result.token });
+      derivationParams = result.derivation_params;
+      
+      // Trust the PC by default for Google logins
+      await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
+      const userSummary = { 
+        username: result.user?.username || 'google_user', 
+        email: result.user?.email || '', 
+        full_name: result.user?.full_name || 'Google User' 
+      };
+      await invoke('save_user_summary', { userJson: JSON.stringify(userSummary) });
+      
+      showAuth('viewUnlock');
+    } catch (e) {
+      document.getElementById('loginErr').textContent = e.message || 'Google Authentication failed';
+    }
+  }
+
   function showPage(name) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const page = document.getElementById('page' + name.charAt(0).toUpperCase() + name.slice(1));
@@ -196,6 +252,7 @@
         const infoEl = document.getElementById('loginServerInfo');
         if (infoEl && state.server_url) { try { infoEl.textContent = 'Server: ' + new URL(state.server_url).host; } catch { infoEl.textContent = 'Server: ' + state.server_url; } }
         showAuth('viewLogin');
+        initGoogleSignIn();
         return;
       }
       Api.token = (await invoke('get_auth_token')) || '';

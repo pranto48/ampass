@@ -287,6 +287,53 @@ const Api = {
     };
   },
 
+  async loginWithGoogle(googleIdToken, deviceId = null) {
+    const result = await this.authRequest('signInWithIdp', {
+      postBody: `id_token=${googleIdToken}&providerId=google.com`,
+      requestUri: window.location.origin,
+      returnIdpCredential: true,
+      returnSecureToken: true
+    });
+
+    this.token = result.idToken;
+    this.refreshToken = result.refreshToken;
+    this.uid = result.localId;
+
+    // Cache tokens in localStorage for persistence
+    localStorage.setItem('refresh_token', this.refreshToken);
+    localStorage.setItem('uid', this.uid);
+
+    // Fetch key derivation parameters
+    let derivationParams;
+    try {
+      const pResult = await this.derivationParams();
+      derivationParams = pResult.params;
+    } catch (e) {
+      if (e.status === 404) {
+        derivationParams = {
+          needs_setup: true,
+          encryption_salt: '',
+          encrypted_vault_key: 'VAULT_NOT_INITIALIZED',
+          vault_key_iv: '',
+          key_iterations: 0
+        };
+      } else {
+        throw e;
+      }
+    }
+
+    return {
+      token: this.token,
+      device_id: deviceId || 'firebase-device',
+      derivation_params: derivationParams,
+      user: {
+        username: result.email ? result.email.split('@')[0] : 'google_user',
+        email: result.email || '',
+        full_name: result.displayName || (result.email ? result.email.split('@')[0] : 'Google User')
+      }
+    };
+  },
+
   async logout() {
     this.token = '';
     this.refreshToken = '';
