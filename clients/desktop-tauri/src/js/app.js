@@ -1317,6 +1317,91 @@
   document.getElementById('btnWipeCache').addEventListener('click', async () => { if (!confirm('Wipe all local data?')) return; await invoke('wipe_local_data'); vaultKeyHex = null; searchKey = null; allDecrypted = []; derivationParams = null; showAuth('viewWelcome'); });
   document.getElementById('btnExportBackup').addEventListener('click', async () => { const data = JSON.stringify({ version: '1.0', exported_at: new Date().toISOString(), items: vaultItems }); await invoke('pick_save_location', { data }); toast('Backup exported'); });
 
+  // Change Login Password
+  document.getElementById('btnUpdateLoginPass')?.addEventListener('click', async () => {
+    const newPass = document.getElementById('setNewLoginPass').value;
+    const confirmPass = document.getElementById('setConfirmLoginPass').value;
+    const msgEl = document.getElementById('changeLoginPassMsg');
+    
+    if (!newPass || !confirmPass) {
+      msgEl.textContent = 'Please fill in all fields.';
+      msgEl.style.color = '#ef4444';
+      return;
+    }
+    if (newPass !== confirmPass) {
+      msgEl.textContent = 'Passwords do not match.';
+      msgEl.style.color = '#ef4444';
+      return;
+    }
+    
+    msgEl.textContent = 'Updating...';
+    msgEl.style.color = '#38bdf8';
+    
+    try {
+      await Api.changeLoginPassword(newPass);
+      msgEl.textContent = 'Login password updated successfully!';
+      msgEl.style.color = '#22c55e';
+      document.getElementById('setNewLoginPass').value = '';
+      document.getElementById('setConfirmLoginPass').value = '';
+    } catch (e) {
+      msgEl.textContent = e.message || 'Failed to update login password.';
+      msgEl.style.color = '#ef4444';
+    }
+  });
+
+  // Change Master Password (re-encrypt vault key)
+  document.getElementById('btnUpdateMasterPass')?.addEventListener('click', async () => {
+    const newMasterPass = document.getElementById('setNewMasterPass').value;
+    const confirmMasterPass = document.getElementById('setConfirmMasterPass').value;
+    const msgEl = document.getElementById('changeMasterPassMsg');
+    
+    if (!vaultKeyHex) {
+      msgEl.textContent = 'Vault is locked. Unlock the vault first.';
+      msgEl.style.color = '#ef4444';
+      return;
+    }
+    if (!newMasterPass || !confirmMasterPass) {
+      msgEl.textContent = 'Please fill in all fields.';
+      msgEl.style.color = '#ef4444';
+      return;
+    }
+    if (newMasterPass !== confirmMasterPass) {
+      msgEl.textContent = 'Passwords do not match.';
+      msgEl.style.color = '#ef4444';
+      return;
+    }
+    
+    msgEl.textContent = 'Deriving and re-encrypting vault key...';
+    msgEl.style.color = '#38bdf8';
+    
+    try {
+      const salt = Crypto.bufToHex(crypto.getRandomValues(new Uint8Array(32)));
+      const iterations = 100000;
+      const wrappingKey = await Crypto.deriveKey(newMasterPass, salt, iterations);
+      const encrypted = await Crypto.encrypt(vaultKeyHex, wrappingKey);
+      
+      await Api.initVaultKey(salt, encrypted.ciphertext, encrypted.iv, iterations);
+      
+      derivationParams = {
+        encryption_salt: salt,
+        encrypted_vault_key: encrypted.ciphertext,
+        vault_key_iv: encrypted.iv,
+        key_iterations: iterations,
+        needs_setup: false
+      };
+      
+      await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
+      
+      msgEl.textContent = 'Master password updated successfully!';
+      msgEl.style.color = '#22c55e';
+      document.getElementById('setNewMasterPass').value = '';
+      document.getElementById('setConfirmMasterPass').value = '';
+    } catch (e) {
+      msgEl.textContent = e.message || 'Failed to update master password.';
+      msgEl.style.color = '#ef4444';
+    }
+  });
+
   // Load settings and server URL on startup
   loadSettings();
   refreshSettingsUrl();

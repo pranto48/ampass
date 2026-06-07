@@ -235,6 +235,23 @@
               <div class="setting-group"><h3>Account</h3>
                 <button id="btnLogout" class="btn-ghost">Logout & Disconnect</button>
               </div>
+              <div class="setting-group"><h3>Change Credentials</h3>
+                <div style="margin-top: 10px; border-bottom: 1px solid #27272a; padding-bottom: 12px; display: flex; flex-direction: column; gap: 6px;">
+                  <h4 style="margin: 0 0 4px 0; font-size: 0.85rem; color: #a1a1aa;">Change Login Password</h4>
+                  <input type="password" id="setNewLoginPass" class="field-input" placeholder="New Login Password">
+                  <input type="password" id="setConfirmLoginPass" class="field-input" placeholder="Confirm New Password">
+                  <button id="btnUpdateLoginPass" class="btn-ghost-sm" style="width: 100%; height: 32px;">Update Login Password</button>
+                  <p id="changeLoginPassMsg" style="margin: 2px 0 0 0; font-size: 0.75rem; min-height: 15px;"></p>
+                </div>
+                <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+                  <h4 style="margin: 0 0 2px 0; font-size: 0.85rem; color: #a1a1aa;">Change Master Password</h4>
+                  <p style="font-size: 0.72rem; color: #71717a; margin: 0 0 4px 0;">This re-encrypts your vault key. Existing items will remain decryptable.</p>
+                  <input type="password" id="setNewMasterPass" class="field-input" placeholder="New Master Password">
+                  <input type="password" id="setConfirmMasterPass" class="field-input" placeholder="Confirm New Master Password">
+                  <button id="btnUpdateMasterPass" class="btn-ghost-sm" style="width: 100%; height: 32px;">Update Master Password</button>
+                  <p id="changeMasterPassMsg" style="margin: 2px 0 0 0; font-size: 0.75rem; min-height: 15px;"></p>
+                </div>
+              </div>
               <div class="setting-group">
                 <h3>About</h3>
                 <p class="setting-val">AMPass Desktop <span id="aboutVersion">v1.107.0</span></p>

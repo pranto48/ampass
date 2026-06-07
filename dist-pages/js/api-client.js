@@ -272,6 +272,19 @@ const Api = {
     localStorage.removeItem('uid');
   },
 
+  async changeLoginPassword(newPassword) {
+    if (!this.token) throw new Error('Not authenticated');
+    const result = await this.authRequest('update', {
+      idToken: this.token,
+      password: newPassword,
+      returnSecureToken: true
+    });
+    this.token = result.idToken;
+    this.refreshToken = result.refreshToken;
+    localStorage.setItem('refresh_token', this.refreshToken);
+    return { success: true };
+  },
+
   async status() {
     // Verify session
     if (!this.token) {
