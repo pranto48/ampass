@@ -132,6 +132,20 @@ const Api = {
 
   async firestoreRequest(method, path, body = null, isRetry = false) {
     await this.ensureInitialized();
+    if (!this.token) {
+      if (typeof invoke === 'function') {
+        this.token = (await invoke('get_auth_token')) || '';
+      } else {
+        this.token = localStorage.getItem('auth_token') || '';
+      }
+    }
+    if (!this.refreshToken) {
+      this.refreshToken = localStorage.getItem('refresh_token') || '';
+    }
+    if (!this.uid) {
+      this.uid = localStorage.getItem('uid') || '';
+    }
+
     const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/${path}`;
     
     const headers = {
