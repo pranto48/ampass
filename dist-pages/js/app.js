@@ -200,21 +200,15 @@
       }
       Api.token = (await invoke('get_auth_token')) || '';
 
-      // Prefer locally encrypted trusted-device params so restart goes straight to Unlock.
-      if (!derivationParams) {
-        const storedParams = await invoke('load_derivation_params');
-        if (storedParams) {
-          derivationParams = JSON.parse(storedParams);
-        }
-      }
-
-      // If the encrypted local params are missing, fetch once and store them.
-      if (!derivationParams && Api.token) {
+      // Fetch fresh parameters from server if authenticated and online
+      let freshParamsLoaded = false;
+      if (Api.token) {
         try {
           const paramResult = await Api.derivationParams();
           if (paramResult.success && paramResult.params) {
             derivationParams = paramResult.params;
             await invoke('store_derivation_params', { paramsJson: JSON.stringify(derivationParams) });
+            freshParamsLoaded = true;
           }
         } catch (e) {
           if (e.code === 'AUTH_REQUIRED' || e.code === 'AUTH_HEADER_MISSING') {
@@ -224,9 +218,15 @@
             showAuth('viewLogin');
             return;
           }
-          // Network error — show server connection problem, not login
-          showServerError(Api.serverUrl || state.server_url, e.message);
-          return;
+          console.warn("Could not fetch fresh derivation params from server, will fall back to cache:", e);
+        }
+      }
+
+      // Fall back to locally stored params if server is unreachable or we are offline
+      if (!freshParamsLoaded && !derivationParams) {
+        const storedParams = await invoke('load_derivation_params');
+        if (storedParams) {
+          derivationParams = JSON.parse(storedParams);
         }
       }
 

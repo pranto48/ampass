@@ -249,7 +249,28 @@ async function login(payload) {
 
 async function unlock(payload) {
   const { masterPassword } = payload;
-  const params = await Storage.getDerivationParams();
+  let params = null;
+
+  // Attempt to fetch fresh params from server if online
+  if (isOnline) {
+    try {
+      const uid = await Storage.getLocal('firebaseUid');
+      if (uid) {
+        const doc = await ApiClient.firestoreRequest('GET', `user_security/${uid}`);
+        const freshParams = ApiClient.fromFirestoreFields(doc.fields);
+        freshParams.needs_setup = false;
+        await Storage.setDerivationParams(freshParams);
+        params = freshParams;
+      }
+    } catch (e) {
+      console.warn("Could not fetch fresh derivation params from server on unlock, falling back to cache:", e);
+    }
+  }
+
+  if (!params) {
+    params = await Storage.getDerivationParams();
+  }
+
   if (!params) throw new Error('No vault data available. Please login first.');
 
   // Check if vault needs first-time initialization
