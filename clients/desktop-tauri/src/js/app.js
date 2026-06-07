@@ -1437,6 +1437,44 @@
 
     btnFile.addEventListener('click', async () => {
       if (!selectedSource) return;
+      if (!(window.__TAURI__ && window.__TAURI__.core)) {
+        // Standard Web Browser file picker
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = selectedSource === 'sticky_password' ? '.txt' : '.csv';
+        input.onchange = (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+          fileName.textContent = file.name;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const text = e.target.result;
+            try {
+              if (selectedSource === 'sticky_password') {
+                parsedItems = parseStickyPasswordTxt(text);
+              } else if (selectedSource === 'lastpass') {
+                parsedItems = parsePasswordCsv(text, ['url', 'username', 'password', 'totp', 'extra', 'name', 'grouping']);
+              } else if (selectedSource === 'bitwarden') {
+                parsedItems = parsePasswordCsv(text, ['name', 'login_uri', 'login_username', 'login_password', 'notes', 'type', 'folder']);
+              } else if (selectedSource === '1password') {
+                parsedItems = parsePasswordCsv(text, ['title', 'url', 'username', 'password', 'notes']);
+              } else {
+                parsedItems = parsePasswordCsv(text, ['name', 'url', 'username', 'password']);
+              }
+              renderPreview();
+            } catch (err) {
+              toast('Parse error: ' + err.message);
+            }
+          };
+          reader.onerror = () => {
+            toast('Failed to read file');
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+        return;
+      }
+
       const filters = selectedSource === 'sticky_password'
         ? [{ name: 'Text files', extensions: ['txt'] }]
         : [{ name: 'CSV files', extensions: ['csv'] }];
@@ -1558,10 +1596,10 @@
         for (const item of batch) {
           try {
             const plainData = { title: item.title, url: item.url, username: item.username, password: item.password, notes: item.notes || '' };
-            const enc = await DesktopCrypto.encryptItem(JSON.stringify(plainData), vaultKeyHex);
-            const titleHash = searchKey ? await DesktopCrypto.hmacHash(item.title || '', searchKey) : null;
-            const urlHash = (searchKey && item.url) ? await DesktopCrypto.hmacHash(extractDomain(item.url), searchKey) : null;
-            const strength = estimateStrength(item.password);
+            const enc = await Crypto.encryptItem(plainData, vaultKeyHex);
+            const titleHash = searchKey ? await Crypto.computeSearchHash(item.title || '', searchKey) : null;
+            const urlHash = (searchKey && item.url) ? await Crypto.computeSearchHash(parseWebAddress(item.url).domain, searchKey) : null;
+            const strength = Crypto.strength(item.password || '');
 
             encBatch.push({
               encrypted_data: enc.ciphertext,

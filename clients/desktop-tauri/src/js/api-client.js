@@ -442,5 +442,47 @@ const Api = {
       });
     } catch {}
     return { success: true };
+  },
+
+  async post(path, body) {
+    if (path === '/api/vault/import-bulk') {
+      return await this.importBulk(body.items, body.source);
+    }
+    throw new Error('Not implemented');
+  },
+
+  async importBulk(items, source) {
+    if (!this.uid) this.uid = localStorage.getItem('uid') || '';
+    if (!this.uid) throw new Error('Not authenticated');
+
+    const writes = items.map(item => {
+      const autoId = Array.from(crypto.getRandomValues(new Uint8Array(15)), b => b.toString(36)).join('').slice(0, 20);
+      return {
+        update: {
+          name: `projects/${this.projectId}/databases/(default)/documents/vault_items/${autoId}`,
+          fields: this.toFirestoreFields({
+            user_id: this.uid,
+            item_type: item.item_type || 'login',
+            encrypted_data: item.encrypted_data,
+            encryption_iv: item.encryption_iv,
+            url_hash: item.url_hash || '',
+            title_hash: item.title_hash || '',
+            password_strength: item.password_strength || 0,
+            is_weak: item.is_weak || 0,
+            is_favorite: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+        }
+      };
+    });
+
+    await this.firestoreRequest('POST', ':commit', { writes });
+    return {
+      success: true,
+      imported: writes.length,
+      skipped: 0,
+      failed: 0
+    };
   }
 };
