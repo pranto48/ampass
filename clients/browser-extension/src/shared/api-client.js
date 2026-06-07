@@ -6,6 +6,9 @@
  */
 
 const ApiClient = {
+  serverUrl: '',
+  token: '',
+
   // ---- Config Retrieval ----
 
   async ensureInitialized() {
@@ -16,7 +19,7 @@ const ApiClient = {
       return { apiKey, projectId };
     }
 
-    const serverUrl = await Storage.getServerUrl();
+    const serverUrl = this.serverUrl || await Storage.getServerUrl();
     if (!serverUrl) throw new Error('Server URL not configured');
 
     let config = null;
@@ -94,6 +97,7 @@ const ApiClient = {
 
       if (res.ok) {
         const data = await res.json();
+        this.token = data.id_token;
         // Update stored tokens
         const trusted = !!(await Storage.getLocal('trustedToken'));
         await Storage.setToken(data.id_token, trusted);
@@ -108,7 +112,7 @@ const ApiClient = {
 
   async firestoreRequest(method, path, body = null, isRetry = false) {
     const { projectId } = await this.ensureInitialized();
-    const token = await Storage.getToken();
+    const token = this.token || await Storage.getToken();
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
 
     const headers = {
@@ -443,6 +447,42 @@ const ApiClient = {
 
   async revokeDevice(deviceId) {
     return { success: true };
+  },
+
+  // ===== Service Worker compatibility =====
+
+  async request(endpoint, options = {}) {
+    const cleanEndpoint = endpoint.replace(/^\//, '');
+
+    if (cleanEndpoint === 'vault/init-key') {
+      const body = options.body;
+      const uid = await Storage.getLocal('firebaseUid');
+      if (!uid) throw new Error('Not authenticated');
+
+      await this.firestoreRequest('PATCH', `user_security/${uid}`, {
+        fields: this.toFirestoreFields({
+          encryption_salt: body.encryption_salt,
+          encrypted_vault_key: body.encrypted_vault_key,
+          vault_key_iv: body.vault_key_iv,
+          key_iterations: body.key_iterations
+        })
+      });
+      return { success: true };
+    }
+
+    if (cleanEndpoint === 'vault/usage-log') {
+      const body = options.body;
+      try {
+        const fields = { last_used_at: new Date().toISOString() };
+        const path = `vault_items/${body.item_id}?updateMask.fieldPaths=last_used_at`;
+        await this.firestoreRequest('PATCH', path, {
+          fields: this.toFirestoreFields(fields)
+        });
+      } catch {}
+      return { success: true };
+    }
+
+    throw new Error('Endpoint not implemented: ' + endpoint);
   }
 };
 
