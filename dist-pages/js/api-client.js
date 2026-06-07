@@ -19,7 +19,14 @@ const Api = {
   // ---- URL Utilities ----
 
   normalizeServerUrl(url) {
-    return String(url || '').trim().replace(/\/+$/, '');
+    let clean = String(url || '').trim();
+    if (clean.startsWith('file://http')) {
+      clean = clean.substring(7);
+    }
+    if (clean.startsWith('file://')) {
+      return '';
+    }
+    return clean.replace(/\/+$/, '');
   },
 
   setServerUrl(url) {

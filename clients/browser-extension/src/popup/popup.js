@@ -118,8 +118,11 @@
   document.getElementById('btnSetupSave').addEventListener('click', async () => {
     const url = document.getElementById('setupUrl').value.trim();
     if (!url) return;
-    // Normalise trailing slash
-    const normalized = url.replace(/\/+$/, '');
+    const normalized = Storage.normalizeServerUrl(url);
+    if (!normalized) {
+      alert('Invalid server URL protocol. Local file:// URLs are not allowed.');
+      return;
+    }
     await Storage.setServerUrl(normalized);
     showView('viewLogin');
   });
@@ -302,6 +305,8 @@
         emptyState.style.display = 'block';
       } else {
         emptyState.style.display = 'none';
+        if (allItemsSection) allItemsSection.style.display = 'block';
+        renderItems(allItemsList, allResult.items, false);
       }
     }
   }
@@ -727,7 +732,7 @@
     try {
       let result;
       if (id) {
-        result = await sendMsg('UPDATE_ITEM', { id: parseInt(id), itemData });
+        result = await sendMsg('UPDATE_ITEM', { id: String(id), itemData });
       } else {
         result = await sendMsg('SAVE_ITEM', { itemData });
       }

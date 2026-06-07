@@ -29,9 +29,14 @@ const Crypto = {
     return await this.decrypt(params.encrypted_vault_key, params.vault_key_iv, wk);
   },
   async decryptItem(encData, iv, vaultKeyHex) {
-    const key = await this.importKey(vaultKeyHex);
-    const pt = await this.decrypt(encData, iv, key);
-    return JSON.parse(pt);
+    try {
+      const key = await this.importKey(vaultKeyHex);
+      const pt = await this.decrypt(encData, iv, key);
+      return JSON.parse(pt);
+    } catch (err) {
+      console.error('Crypto.decryptItem failed. encData:', encData, 'iv:', iv, 'vaultKeyHex:', vaultKeyHex, 'Error:', err);
+      throw err;
+    }
   },
   async encryptItem(data, vaultKeyHex) {
     const key = await this.importKey(vaultKeyHex);

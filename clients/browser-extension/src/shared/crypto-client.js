@@ -90,9 +90,14 @@ const CryptoClient = {
    * Decrypt a vault item's encrypted_data blob
    */
   async decryptItem(encryptedData, iv, vaultKeyHex) {
-    const key = await this.importKey(vaultKeyHex);
-    const plaintext = await this.decrypt(encryptedData, iv, key);
-    return JSON.parse(plaintext);
+    try {
+      const key = await this.importKey(vaultKeyHex);
+      const plaintext = await this.decrypt(encryptedData, iv, key);
+      return JSON.parse(plaintext);
+    } catch (err) {
+      console.error('CryptoClient.decryptItem failed. encryptedData:', encryptedData, 'iv:', iv, 'vaultKeyHex:', vaultKeyHex, 'Error:', err);
+      throw err;
+    }
   },
 
   /**

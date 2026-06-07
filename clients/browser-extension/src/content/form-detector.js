@@ -321,7 +321,7 @@
     icon.className = 'ampass-field-icon';
     icon.title = 'AMPass - Click to autofill';
     icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="#6366f1"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg>`;
-    icon.style.cssText = 'position:fixed;cursor:pointer;z-index:2147483646;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;opacity:0.7;transition:opacity 0.2s;pointer-events:auto;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.2);padding:2px;';
+    icon.style.cssText = 'position:absolute;cursor:pointer;z-index:2147483646;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;opacity:0.7;transition:opacity 0.2s;pointer-events:auto;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.2);padding:2px;';
 
     icon.addEventListener('mouseenter', () => icon.style.opacity = '1');
     icon.addEventListener('mouseleave', () => icon.style.opacity = '0.7');
@@ -378,9 +378,10 @@
         icon.style.display = 'none';
         return;
       }
+      const bodyRect = document.body.getBoundingClientRect();
       icon.style.display = 'flex';
-      icon.style.top = (rect.top + (rect.height - 22) / 2) + 'px';
-      icon.style.left = (rect.right - 26) + 'px';
+      icon.style.top = (rect.top - bodyRect.top + (rect.height - 22) / 2) + 'px';
+      icon.style.left = (rect.right - bodyRect.left - 26) + 'px';
     }
 
     positionIcon();
@@ -459,7 +460,7 @@
     const bubble = document.createElement('div');
     bubble.id = 'ampass-credential-dropdown';
     bubble.style.cssText = `
-      position: fixed; z-index: 2147483647;
+      position: absolute; z-index: 2147483647;
       background: #18181b; border: 1px solid #27272a; border-radius: 12px;
       padding: 16px; width: 280px;
       box-shadow: 0 12px 40px rgba(0,0,0,0.5);
@@ -634,17 +635,19 @@
     bubble.appendChild(form);
     document.body.appendChild(bubble);
 
+    const bodyRect = document.body.getBoundingClientRect();
     const iconRect = icon.getBoundingClientRect();
-    bubble.style.top = (iconRect.bottom + 4) + 'px';
-    bubble.style.left = Math.max(8, iconRect.right - 280) + 'px';
+    bubble.style.top = (iconRect.bottom - bodyRect.top + 4) + 'px';
+    bubble.style.left = (Math.max(8, iconRect.right - 280) - bodyRect.left) + 'px';
 
     requestAnimationFrame(() => {
       const ddRect = bubble.getBoundingClientRect();
+      const currentBodyRect = document.body.getBoundingClientRect();
       if (ddRect.bottom > window.innerHeight - 10) {
-        bubble.style.top = (iconRect.top - ddRect.height - 4) + 'px';
+        bubble.style.top = (iconRect.top - currentBodyRect.top - ddRect.height - 4) + 'px';
       }
       if (ddRect.right > window.innerWidth - 10) {
-        bubble.style.left = (window.innerWidth - ddRect.width - 10) + 'px';
+        bubble.style.left = (window.innerWidth - ddRect.width - 10 - currentBodyRect.left) + 'px';
       }
     });
 
@@ -781,7 +784,7 @@
     const dropdown = document.createElement('div');
     dropdown.id = 'ampass-credential-dropdown';
     dropdown.style.cssText = `
-      position: fixed; z-index: 2147483647;
+      position: absolute; z-index: 2147483647;
       background: #18181b; border: 1px solid #27272a; border-radius: 10px;
       padding: 6px 0; min-width: 260px; max-width: 340px; max-height: 320px; overflow-y: auto;
       box-shadow: 0 12px 40px rgba(0,0,0,0.5);
@@ -963,18 +966,20 @@
     document.body.appendChild(dropdown);
 
     // Position near icon
+    const bodyRect = document.body.getBoundingClientRect();
     const iconRect = icon.getBoundingClientRect();
-    dropdown.style.top = (iconRect.bottom + 4) + 'px';
-    dropdown.style.left = Math.max(8, iconRect.right - 280) + 'px';
+    dropdown.style.top = (iconRect.bottom - bodyRect.top + 4) + 'px';
+    dropdown.style.left = (Math.max(8, iconRect.right - 280) - bodyRect.left) + 'px';
 
     // Adjust if off-screen
     requestAnimationFrame(() => {
       const ddRect = dropdown.getBoundingClientRect();
+      const currentBodyRect = document.body.getBoundingClientRect();
       if (ddRect.bottom > window.innerHeight - 10) {
-        dropdown.style.top = (iconRect.top - ddRect.height - 4) + 'px';
+        dropdown.style.top = (iconRect.top - currentBodyRect.top - ddRect.height - 4) + 'px';
       }
       if (ddRect.right > window.innerWidth - 10) {
-        dropdown.style.left = (window.innerWidth - ddRect.width - 10) + 'px';
+        dropdown.style.left = (window.innerWidth - ddRect.width - 10 - currentBodyRect.left) + 'px';
       }
     });
 
@@ -1019,7 +1024,7 @@
     const msg = document.createElement('div');
     msg.id = 'ampass-inline-message';
     msg.style.cssText = `
-      position: fixed; z-index: 2147483647;
+      position: absolute; z-index: 2147483647;
       background: #18181b; border: 1px solid #27272a; border-radius: 10px;
       padding: 12px 16px; min-width: 220px; max-width: 320px;
       box-shadow: 0 8px 30px rgba(0,0,0,0.4);
@@ -1040,9 +1045,10 @@
     document.body.appendChild(msg);
 
     // Position near icon
+    const bodyRect = document.body.getBoundingClientRect();
     const iconRect = icon.getBoundingClientRect();
-    msg.style.top = (iconRect.bottom + 4) + 'px';
-    msg.style.left = Math.max(8, iconRect.right - 260) + 'px';
+    msg.style.top = (iconRect.bottom - bodyRect.top + 4) + 'px';
+    msg.style.left = (Math.max(8, iconRect.right - 260) - bodyRect.left) + 'px';
 
     // Button action
     if (buttonText) {

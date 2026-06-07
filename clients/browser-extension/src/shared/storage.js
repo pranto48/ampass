@@ -29,8 +29,18 @@ const Storage = {
   async removeLocal(key) { await chrome.storage.local.remove(key); },
 
   // ===== Server URL =====
+  normalizeServerUrl(url) {
+    let clean = String(url || '').trim();
+    if (clean.startsWith('file://http')) {
+      clean = clean.substring(7);
+    }
+    if (clean.startsWith('file://')) {
+      return '';
+    }
+    return clean.replace(/\/+$/, '');
+  },
   async getServerUrl() { return await this.getLocal('serverUrl') || ''; },
-  async setServerUrl(url) { await this.setLocal('serverUrl', url.replace(/\/+$/, '')); },
+  async setServerUrl(url) { await this.setLocal('serverUrl', this.normalizeServerUrl(url)); },
 
   // ===== Auth Token =====
   // Token can be in session (default) or local (trusted browser)
