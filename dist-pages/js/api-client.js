@@ -507,5 +507,33 @@ const Api = {
       skipped: 0,
       failed: 0
     };
+  },
+
+  async resetServerVault() {
+    if (!this.uid) this.uid = localStorage.getItem('uid') || '';
+    if (!this.uid) throw new Error('Not authenticated');
+
+    // 1. Fetch all vault items
+    const result = await this.listVault();
+    const items = result.items || [];
+    
+    // Batch deletes (Firestore REST API commit limit is 500. Delete in chunks of 200)
+    const CHUNK_SIZE = 200;
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+      const chunk = items.slice(i, i + CHUNK_SIZE);
+      const writes = chunk.map(item => ({
+        delete: `projects/${this.projectId}/databases/(default)/documents/vault_items/${item.id}`
+      }));
+      await this.firestoreRequest('POST', ':commit', { writes });
+    }
+
+    // 2. Delete user_security document
+    try {
+      await this.firestoreRequest('DELETE', `user_security/${this.uid}`);
+    } catch (e) {
+      // Ignore if it didn't exist or was already deleted
+    }
+
+    return { success: true };
   }
 };

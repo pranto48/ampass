@@ -1317,6 +1317,35 @@
   document.getElementById('btnWipeCache').addEventListener('click', async () => { if (!confirm('Wipe all local data?')) return; await invoke('wipe_local_data'); vaultKeyHex = null; searchKey = null; allDecrypted = []; derivationParams = null; showAuth('viewWelcome'); });
   document.getElementById('btnExportBackup').addEventListener('click', async () => { const data = JSON.stringify({ version: '1.0', exported_at: new Date().toISOString(), items: vaultItems }); await invoke('pick_save_location', { data }); toast('Backup exported'); });
 
+  document.getElementById('btnResetServerVault')?.addEventListener('click', async () => {
+    if (!confirm('WARNING: This will permanently delete all vault items on the server and delete your security keys. You will lose access to all your passwords unless you have a backup. Are you sure you want to proceed?')) {
+      return;
+    }
+    if (!confirm('Please confirm once more: Do you really want to reset your server vault?')) {
+      return;
+    }
+    
+    toast('Resetting server vault...');
+    try {
+      await Api.resetServerVault();
+      
+      // Clear local state
+      vaultKeyHex = null;
+      searchKey = null;
+      allDecrypted = [];
+      derivationParams = null;
+      
+      await invoke('wipe_local_data');
+      await invoke('clear_derivation_params');
+      Api.token = '';
+      
+      toast('Server vault reset successfully!');
+      showAuth('viewWelcome');
+    } catch (e) {
+      alert('Failed to reset server vault: ' + (e.message || 'Unknown error'));
+    }
+  });
+
   // Change Login Password
   document.getElementById('btnUpdateLoginPass')?.addEventListener('click', async () => {
     const newPass = document.getElementById('setNewLoginPass').value;
