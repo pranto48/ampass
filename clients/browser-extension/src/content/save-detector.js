@@ -445,6 +445,13 @@
   document.addEventListener('click', onDocumentClick, true);
   document.addEventListener('keydown', onDocumentKeydown, true);
 
+  // Clear data-ampass-filled attribute if user edits the field manually
+  document.addEventListener('input', (e) => {
+    if (e.target && e.target.hasAttribute('data-ampass-filled')) {
+      e.target.removeAttribute('data-ampass-filled');
+    }
+  }, true);
+
   // Pick up credentials queued before a normal login redirect.
   setTimeout(checkPendingSave, 500);
 
