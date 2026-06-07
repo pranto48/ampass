@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AMPass</title>
+  <meta name="description" content="AMPass — Zero-knowledge encrypted password vault. Secure, offline-capable, open source.">
+  <title>AMPass — Secure Vault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -17,9 +20,9 @@
         <h1 class="auth-title">AMPass</h1>
         <p class="auth-sub">Secure Password Manager</p>
         <div class="auth-form">
-          <label class="field-label">Server URL</label>
-          <input type="url" id="welcomeUrl" class="field-input" placeholder="https://yourdomain.com/ampass">
-          <p class="field-hint">Enter your AMPass server address</p>
+          <label class="field-label">Vault Link (GitHub Subdomain)</label>
+          <input type="url" id="welcomeUrl" class="field-input" placeholder="https://ampass.arif.bd" autocomplete="off">
+          <p class="field-hint">Enter your AMPass GitHub Pages address (e.g. https://ampass.arif.bd)</p>
           <button id="btnConnect" class="btn-primary">Connect</button>
         </div>
         <p class="auth-warning">⚠️ Not professionally audited. Do not use for real credentials.</p>
@@ -360,11 +363,6 @@
     <!-- Toast -->
     <div id="toast" class="toast" style="display:none;"></div>
   </div>
-
-  <!-- Firebase SDK (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <script src="js/crypto.js"></script>
   <script src="js/api-client.js"></script>
