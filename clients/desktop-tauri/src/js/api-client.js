@@ -185,6 +185,15 @@ const Api = {
 
     if (!res.ok) {
       const errMsg = data.error?.message || 'Firestore request failed';
+      if (res.status === 401 || errMsg.includes('INVALID_ID_TOKEN') || errMsg.includes('auth/invalid-user-token')) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('uid');
+        if (typeof invoke === 'function') {
+          invoke('logout').catch(() => {});
+        }
+        location.reload();
+      }
       throw Object.assign(new Error(errMsg), { code: data.error?.status || 'FIRESTORE_ERROR', status: res.status });
     }
 
