@@ -473,8 +473,7 @@ async function getMatches(url) {
     if (item.item_type !== 'login') continue;
     try {
       const decrypted = await CryptoClient.decryptItem(item.encrypted_data, item.encryption_iv, vaultKeyHex);
-      const itemDomain = DomainUtils.getBaseDomain(decrypted.url || '');
-      if (itemDomain && itemDomain === domain) {
+      if (decrypted.url && DomainUtils.isUrlMatch(decrypted.url, url)) {
         matches.push({
           id: item.id,
           title: decrypted.title || 'Untitled',

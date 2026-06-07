@@ -59,6 +59,48 @@ const DomainUtils = {
   },
 
   /**
+   * Check if an item URL matches the current page URL with subdomain, subdirectory, and port specificity.
+   */
+  isUrlMatch(itemUrl, currentUrl) {
+    if (!itemUrl || !currentUrl) return false;
+
+    let normItem = itemUrl.trim();
+    if (!normItem.includes('://')) normItem = 'https://' + normItem;
+    let normCurrent = currentUrl.trim();
+    if (!normCurrent.includes('://')) normCurrent = 'https://' + normCurrent;
+
+    try {
+      const parsedItem = new URL(normItem);
+      const parsedCurrent = new URL(normCurrent);
+
+      // 1. Hostname Match (Strict Subdomain matching)
+      if (parsedItem.hostname.toLowerCase() !== parsedCurrent.hostname.toLowerCase()) {
+        return false;
+      }
+
+      // 2. Port Match (Strict Port matching)
+      const itemPort = parsedItem.port || (parsedItem.protocol === 'https:' ? '443' : '80');
+      const currentPort = parsedCurrent.port || (parsedCurrent.protocol === 'https:' ? '443' : '80');
+      if (itemPort !== currentPort) {
+        return false;
+      }
+
+      // 3. Path Match (Strict subdirectory/subdirectory matching)
+      const itemPath = parsedItem.pathname.replace(/\/+$/, '');
+      const currentPath = parsedCurrent.pathname.replace(/\/+$/, '');
+      if (itemPath && itemPath !== '/') {
+        if (!currentPath.startsWith(itemPath)) {
+          return false;
+        }
+      }
+
+      return true;
+    } catch {
+      return this.domainsMatch(itemUrl, currentUrl);
+    }
+  },
+
+  /**
    * Normalize a URL for storage/comparison
    */
   normalizeUrl(url) {
