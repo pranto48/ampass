@@ -1,8 +1,9 @@
-name: Deploy Static Content to Pages
+name: Deploy Web Vault to GitHub Pages
 
 on:
   push:
     branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,7 +15,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validate & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate firebase-config.json
+        run: |
+          FILE="clients/desktop-tauri/src/firebase-config.json"
+          if [ -f "$FILE" ]; then
+            python3 -c "import json,sys; json.load(open('$FILE'))" && echo "✅ firebase-config.json is valid JSON" || (echo "❌ firebase-config.json is invalid JSON" && exit 1)
+          else
+            echo "ℹ️  firebase-config.json not present (optional)"
+          fi
+
+      - name: Check version consistency
+        run: |
+          MANIFEST_VER=$(python3 -c "import json; d=json.load(open('clients/browser-extension/manifest.json')); print(d['version'])")
+          APP_VER=$(grep -oP "(?<=return ')[\d.]+(?=')" clients/desktop-tauri/src/js/app.js | head -1 || echo "")
+          echo "Extension manifest version: $MANIFEST_VER"
+          echo "App.js version: ${APP_VER:-not detected}"
+
   deploy:
+    name: Deploy to GitHub Pages
+    needs: validate
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -22,12 +48,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: List deploy contents
+        run: |
+          echo "📦 Deploying from clients/desktop-tauri/src/"
+          find clients/desktop-tauri/src -type f | sort
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
-      - name: Upload artifact
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'clients/desktop-tauri/src'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -118,9 +118,19 @@
   document.getElementById('btnSetupSave').addEventListener('click', async () => {
     const url = document.getElementById('setupUrl').value.trim();
     if (!url) return;
-    await Storage.setServerUrl(url);
+    // Normalise trailing slash
+    const normalized = url.replace(/\/+$/, '');
+    await Storage.setServerUrl(normalized);
     showView('viewLogin');
   });
+
+  // Pre-fill saved server URL when setup screen is shown
+  async function prefillSetupUrl() {
+    const saved = await Storage.getServerUrl();
+    const input = document.getElementById('setupUrl');
+    if (saved && input && !input.value) input.value = saved;
+  }
+  prefillSetupUrl();
 
   // ===== Login =====
   document.getElementById('btnLogin').addEventListener('click', async () => {
@@ -337,15 +347,15 @@
         await openDetailView(item);
       });
 
-      // Quick action buttons
+      // Quick action buttons — use String IDs for consistency with PHP backend
       row.querySelectorAll('.btn-autofill').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); autofillItem(parseInt(btn.dataset.id)); });
+        btn.addEventListener('click', e => { e.stopPropagation(); autofillItem(btn.dataset.id); });
       });
       row.querySelectorAll('.btn-copy-user').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); copyField(parseInt(btn.dataset.id), 'username'); });
+        btn.addEventListener('click', e => { e.stopPropagation(); copyField(btn.dataset.id, 'username'); });
       });
       row.querySelectorAll('.btn-copy-pass').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); copyField(parseInt(btn.dataset.id), 'password'); });
+        btn.addEventListener('click', e => { e.stopPropagation(); copyField(btn.dataset.id, 'password'); });
       });
 
       container.appendChild(row);
@@ -572,7 +582,9 @@
   document.getElementById('btnAddNew').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url?.startsWith('http') ? tab.url : '';
-    const title = tab?.title || '';
+    // Use domain as suggested title (e.g. "github.com")
+    let title = '';
+    try { title = url ? new URL(url).hostname.replace(/^www\./, '') : ''; } catch { title = tab?.title || ''; }
     openEditForm(null, { title, url, username: '', password: '', totp_secret: '', notes: '', item_type: 'login' });
   });
 

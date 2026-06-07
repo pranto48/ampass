@@ -51,6 +51,7 @@
           return;
         case 'load_user_summary':
           return localStorage.getItem('user_summary') || '';
+        case 'logout':
         case 'clear_trusted_pc':
           localStorage.removeItem('auth_token');
           localStorage.removeItem('derivation_params');
@@ -131,10 +132,12 @@
       await invoke('set_server_url', { url: normalized });
       Api.setServerUrl(normalized);
       // Clear old token if domain changed
-      if (currentUrl && new URL(normalized).host !== new URL(currentUrl).host) {
-        await invoke('logout');
-        Api.token = '';
-      }
+      try {
+        if (currentUrl && new URL(normalized).host !== new URL(currentUrl).host) {
+          await invoke('clear_trusted_pc');
+          Api.token = '';
+        }
+      } catch { Api.token = ''; }
       location.reload();
     });
 
@@ -457,7 +460,7 @@
           <div class="item-actions">
             <button class="btn-ghost-sm" data-copy-user="${i._id}" title="Copy username">👤</button>
             <button class="btn-ghost-sm" data-copy-pass="${i._id}" title="Copy password">📋</button>
-            ${i.url ? `<button class="btn-ghost-sm" onclick="window.__TAURI__?.shell?.open('${esc(i.url)}')" title="Open URL">🌐</button>` : ''}
+            ${i.url ? `<button class="btn-ghost-sm" data-open-url="${esc(i.url)}" title="Open URL">🌐</button>` : ''}
           </div>
         </div>`).join('')
       : '<p class="empty-hint">No bookmarks yet. Mark a Web Account as ⭐ Favorite to pin it here.</p>';
@@ -562,23 +565,26 @@
   // ===== Item Actions =====
   document.addEventListener('click', async (e) => {
     const copyUser = e.target.closest('[data-copy-user]');
-    if (copyUser) { e.stopPropagation(); await copyField(parseInt(copyUser.dataset.copyUser), 'username'); return; }
+    if (copyUser) { e.stopPropagation(); await copyField(String(copyUser.dataset.copyUser), 'username'); return; }
     const copyPass = e.target.closest('[data-copy-pass]');
-    if (copyPass) { e.stopPropagation(); await copyField(parseInt(copyPass.dataset.copyPass), 'password'); return; }
+    if (copyPass) { e.stopPropagation(); await copyField(String(copyPass.dataset.copyPass), 'password'); return; }
     const row = e.target.closest('.item-row');
-    if (row) { showItemDetail(parseInt(row.dataset.id)); return; }
+    if (row) { showItemDetail(String(row.dataset.id)); return; }
     const addBtn = e.target.closest('[data-add]');
     if (addBtn) { showAddModal(addBtn.dataset.add); return; }
+    const openUrlBtn = e.target.closest('[data-open-url]');
+    if (openUrlBtn) { e.stopPropagation(); openUrl(openUrlBtn.dataset.openUrl); return; }
   });
 
   async function copyField(id, field) {
-    const item = allDecrypted.find(i => i._id === id);
+    const sid = String(id);
+    const item = allDecrypted.find(i => String(i._id) === sid);
     if (!item || !item[field]) { toast('Nothing to copy'); return; }
     await navigator.clipboard.writeText(item[field]);
     toast(field === 'password' ? 'Password copied (clears in 30s)' : 'Copied!');
     if (field === 'password') setTimeout(async () => { try { const c = await navigator.clipboard.readText(); if (c === item[field]) await navigator.clipboard.writeText(''); } catch {} }, 30000);
     // Log usage
-    try { await Api.usageLog(id, 'copied_' + field, 'desktop'); } catch {}
+    try { await Api.usageLog(sid, 'copied_' + field, 'desktop'); } catch {}
   }
 
   // Make copyField available globally for inline onclick handlers
@@ -589,17 +595,18 @@
    * SECURITY: Never passes password as command-line argument.
    */
   async function launchApp(id) {
-    const item = allDecrypted.find(i => i._id === id);
+    const sid = String(id);
+    const item = allDecrypted.find(i => String(i._id) === sid);
     if (!item) { toast('Item not found'); return; }
     const exePath = item.executable_path || item.launch_command || '';
     if (!exePath) { toast('No executable path configured'); return; }
     try {
       await invoke('launch_application', { path: exePath });
       toast('App launched: ' + (item.application_name || item.title));
-      try { await Api.usageLog(id, 'launched_app', 'desktop'); } catch {}
+      try { await Api.usageLog(sid, 'launched_app', 'desktop'); } catch {}
     } catch (e) {
       toast('Launch failed: ' + e.message);
-      try { await Api.usageLog(id, 'app_launch_failed', 'desktop'); } catch {}
+      try { await Api.usageLog(sid, 'app_launch_failed', 'desktop'); } catch {}
     }
   }
   window.launchApp = launchApp;
@@ -610,7 +617,8 @@
    * SECURITY: Password is never written to .rdp file. User must paste manually.
    */
   async function openRdp(id) {
-    const item = allDecrypted.find(i => i._id === id);
+    const sid = String(id);
+    const item = allDecrypted.find(i => String(i._id) === sid);
     if (!item) { toast('Item not found'); return; }
     const host = item.host || '';
     const port = item.port || 3389;
@@ -647,7 +655,8 @@
   window.toggleDetailPass = toggleDetailPass;
 
   function showItemDetail(id) {
-    const item = allDecrypted.find(i => i._id === id);
+    const sid = String(id);
+    const item = allDecrypted.find(i => String(i._id) === sid);
     if (!item) return;
     document.getElementById('modalTitle').textContent = item.title || 'Item Details';
     let html = '<div class="auth-form">';

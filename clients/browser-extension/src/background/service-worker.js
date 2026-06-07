@@ -642,7 +642,9 @@ async function favoriteItem(id, isFavorite) {
   if (!await Storage.isVaultUnlocked()) throw new Error('Vault is locked');
   if (!isOnline) return { success: false, code: 'OFFLINE_READ_ONLY', error: 'Server offline. Offline mode is read-only.' };
 
-  await ApiClient.request('vault/favorite', { body: { id, is_favorite: isFavorite ? 1 : 0 } });
+  // NOTE: The PHP API uses vault/update to toggle is_favorite — there is no separate vault/favorite endpoint.
+  // We send only the is_favorite field alongside the id; the server ignores missing optional fields.
+  await ApiClient.updateVaultItem({ id, is_favorite: isFavorite ? 1 : 0 });
   // Update local cache
   if (cachedVaultItems) {
     const item = cachedVaultItems.find(i => i.id === id);
