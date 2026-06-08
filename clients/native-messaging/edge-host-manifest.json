@@ -4,6 +4,8 @@
   "path": "C:\\Program Files\\AMPass\\ampass-desktop.exe",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://REPLACE_WITH_YOUR_EXTENSION_ID/"
+    "chrome-extension://abjmemohpnoinbhngjppnpbacjdmajmd/",
+    "chrome-extension://pmjlncjjocmhhocadbjafkllcnpcdnjg/",
+    "chrome-extension://kbkdfkleifdhojbpnhdidpgbjfpgdlla/"
   ]
 }
