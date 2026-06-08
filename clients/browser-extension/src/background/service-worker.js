@@ -397,7 +397,6 @@ async function fetchVaultItems() {
   const result = await ApiClient.listVault();
   cachedVaultItems = result.items || [];
   lastFetchTime = Date.now();
-  await Storage.setSession('vaultItems', cachedVaultItems);
   // Save to persistent offline cache
   if (cachedVaultItems.length > 0) {
     await Storage.setEncryptedVaultCache(cachedVaultItems);
@@ -409,13 +408,6 @@ async function fetchVaultItems() {
  */
 async function ensureVaultItemsLoaded() {
   if (cachedVaultItems && cachedVaultItems.length > 0) return;
-
-  // Try session storage
-  const sessionItems = await Storage.getSession('vaultItems');
-  if (sessionItems && sessionItems.length > 0) {
-    cachedVaultItems = sessionItems;
-    return;
-  }
 
   // Try persistent offline cache
   const offlineItems = await Storage.getEncryptedVaultCache();
@@ -514,10 +506,7 @@ async function decryptItem(id) {
   if (!await Storage.isVaultUnlocked()) throw new Error('Vault is locked');
 
   const vaultKeyHex = await Storage.getVaultKey();
-  if (!cachedVaultItems) {
-    const stored = await Storage.getSession('vaultItems');
-    cachedVaultItems = stored || [];
-  }
+  await ensureVaultItemsLoaded();
 
   const item = cachedVaultItems.find(i => i.id === id);
   if (!item) throw new Error('Item not found');
@@ -652,7 +641,6 @@ async function deleteItem(id) {
   // Remove from local cache immediately
   if (cachedVaultItems) {
     cachedVaultItems = cachedVaultItems.filter(i => i.id !== id);
-    await Storage.setSession('vaultItems', cachedVaultItems);
     await Storage.setEncryptedVaultCache(cachedVaultItems);
   }
   return { success: true };
@@ -669,7 +657,6 @@ async function favoriteItem(id, isFavorite) {
   if (cachedVaultItems) {
     const item = cachedVaultItems.find(i => i.id === id);
     if (item) item.is_favorite = isFavorite ? 1 : 0;
-    await Storage.setSession('vaultItems', cachedVaultItems);
     await Storage.setEncryptedVaultCache(cachedVaultItems);
   }
   return { success: true };
