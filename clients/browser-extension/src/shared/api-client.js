@@ -72,7 +72,11 @@ const ApiClient = {
 
     const data = await res.json();
     if (!res.ok) {
-      const error = new Error(data.error?.message || 'Authentication failed');
+      let errMsg = data.error?.message || 'Authentication failed';
+      if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+        errMsg = 'Firebase quota exceeded for the shared project. Please configure your own private Firebase project in firebase-config.json to resolve this permanently.';
+      }
+      const error = new Error(errMsg);
       error.code = data.error?.errors?.[0]?.reason || 'AUTH_ERROR';
       error.status = res.status;
       throw error;
@@ -156,7 +160,11 @@ const ApiClient = {
     }
 
     if (!res.ok) {
-      const error = new Error(data.error?.message || 'Request failed');
+      let errMsg = data.error?.message || 'Request failed';
+      if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+        errMsg = 'Firebase quota exceeded for the shared project. Please configure your own private Firebase project in firebase-config.json to resolve this permanently.';
+      }
+      const error = new Error(errMsg);
       error.code = data.error?.status || 'FIRESTORE_ERROR';
       error.status = res.status;
       throw error;

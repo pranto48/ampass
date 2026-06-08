@@ -94,7 +94,10 @@ const Api = {
 
     const data = await res.json();
     if (!res.ok) {
-      const errMsg = data.error?.message || 'Authentication request failed';
+      let errMsg = data.error?.message || 'Authentication request failed';
+      if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+        errMsg = 'Firebase quota exceeded for the shared project. Please configure your own private Firebase project in firebase-config.json to resolve this permanently.';
+      }
       throw Object.assign(new Error(errMsg), { code: data.error?.errors?.[0]?.reason || 'AUTH_ERROR', status: res.status });
     }
     return data;
@@ -184,7 +187,10 @@ const Api = {
     }
 
     if (!res.ok) {
-      const errMsg = data.error?.message || 'Firestore request failed';
+      let errMsg = data.error?.message || 'Firestore request failed';
+      if (res.status === 429 || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted')) {
+        errMsg = 'Firebase quota exceeded for the shared project. Please configure your own private Firebase project in firebase-config.json to resolve this permanently.';
+      }
       if (res.status === 401 || errMsg.includes('INVALID_ID_TOKEN') || errMsg.includes('auth/invalid-user-token')) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
