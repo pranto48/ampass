@@ -392,6 +392,20 @@ const ApiClient = {
     return { items };
   },
 
+  async updateVaultTimestamp() {
+    const uid = await Storage.getLocal('firebaseUid');
+    if (!uid) return;
+    try {
+      await this.firestoreRequest('PATCH', `user_security/${uid}?updateMask.fieldPaths=vault_updated_at`, {
+        fields: this.toFirestoreFields({
+          vault_updated_at: new Date().toISOString()
+        })
+      });
+    } catch (e) {
+      console.warn('Failed to update vault timestamp:', e);
+    }
+  },
+
   async saveVaultItem(itemData) {
     const uid = await Storage.getLocal('firebaseUid');
     if (!uid) throw new Error('Not authenticated');
@@ -413,6 +427,7 @@ const ApiClient = {
 
     const doc = await this.firestoreRequest('POST', 'vault_items', { fields });
     const id = doc.name.split('/').pop();
+    await this.updateVaultTimestamp();
     return { id };
   },
 
@@ -436,11 +451,13 @@ const ApiClient = {
     await this.firestoreRequest('PATCH', path, {
       fields: this.toFirestoreFields(fieldsToUpdate)
     });
+    await this.updateVaultTimestamp();
     return { success: true };
   },
 
   async deleteVaultItem(id) {
     await this.firestoreRequest('DELETE', `vault_items/${id}`);
+    await this.updateVaultTimestamp();
     return { success: true };
   },
 

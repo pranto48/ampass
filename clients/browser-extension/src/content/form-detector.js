@@ -321,10 +321,23 @@
     icon.className = 'ampass-field-icon';
     icon.title = 'AMPass - Click to autofill';
     icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="#6366f1"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg>`;
-    icon.style.cssText = 'position:absolute;cursor:pointer;z-index:2147483646;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;opacity:0.7;transition:opacity 0.2s;pointer-events:auto;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.2);padding:2px;';
+    icon.style.cssText = 'position:absolute;cursor:pointer;z-index:2147483646;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;opacity:0;pointer-events:none;transition:opacity 0.15s ease-in-out;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.2);padding:2px;';
 
-    icon.addEventListener('mouseenter', () => icon.style.opacity = '1');
-    icon.addEventListener('mouseleave', () => icon.style.opacity = '0.7');
+    function showIcon() {
+      icon.style.opacity = '0.85';
+      icon.style.pointerEvents = 'auto';
+      positionIcon();
+    }
+
+    function hideIcon() {
+      if (document.getElementById('ampass-credential-dropdown')) return;
+      if (document.activeElement === field) return;
+      icon.style.opacity = '0';
+      icon.style.pointerEvents = 'none';
+    }
+
+    icon.addEventListener('mouseenter', showIcon);
+    icon.addEventListener('mouseleave', hideIcon);
     icon.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -336,6 +349,7 @@
     // Focus-triggered dropdown: show credential dropdown when the field gets focus
     // This mimics LastPass/StickyPassword inline popup behavior
     field.addEventListener('focus', () => {
+      showIcon();
       // Only trigger if we haven't already auto-filled and there's no dropdown showing
       if (field.getAttribute('data-ampass-filled') === 'true') return;
       if (document.getElementById('ampass-credential-dropdown')) return;
@@ -369,19 +383,35 @@
 
     field.addEventListener('blur', () => {
       clearTimeout(field.__ampassFocusTimer);
+      setTimeout(hideIcon, 150);
     });
+
+    field.addEventListener('mouseenter', showIcon);
+    field.addEventListener('mouseleave', hideIcon);
 
     // Position the icon at the right edge of the field
     function positionIcon() {
       const rect = field.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
+      if (rect.width === 0 || rect.height === 0 || !document.body.contains(field)) {
         icon.style.display = 'none';
         return;
       }
-      const bodyRect = document.body.getBoundingClientRect();
       icon.style.display = 'flex';
-      icon.style.top = (rect.top - bodyRect.top + (rect.height - 22) / 2) + 'px';
-      icon.style.left = (rect.right - bodyRect.left - 26) + 'px';
+      
+      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      
+      const bodyStyle = window.getComputedStyle(document.body);
+      const isBodyPositioned = bodyStyle.position !== 'static';
+      
+      if (isBodyPositioned) {
+        const bodyRect = document.body.getBoundingClientRect();
+        icon.style.top = (rect.top - bodyRect.top + (rect.height - 22) / 2) + 'px';
+        icon.style.left = (rect.right - bodyRect.left - 26) + 'px';
+      } else {
+        icon.style.top = (rect.top + scrollTop + (rect.height - 22) / 2) + 'px';
+        icon.style.left = (rect.right + scrollLeft - 26) + 'px';
+      }
     }
 
     positionIcon();
@@ -394,10 +424,6 @@
     }
     window.addEventListener('scroll', scheduleReposition, { passive: true });
     window.addEventListener('resize', scheduleReposition, { passive: true });
-
-    // Show only when field is visible and focused or hovered
-    field.addEventListener('focus', () => { icon.style.opacity = '0.9'; positionIcon(); });
-    field.addEventListener('blur', () => { icon.style.opacity = '0.7'; });
   }
 
   // ================================================================

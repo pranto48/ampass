@@ -420,6 +420,20 @@ const Api = {
     }
   },
 
+  async updateVaultTimestamp() {
+    if (!this.uid) this.uid = localStorage.getItem('uid') || '';
+    if (!this.uid) return;
+    try {
+      await this.firestoreRequest('PATCH', `user_security/${this.uid}?updateMask.fieldPaths=vault_updated_at`, {
+        fields: this.toFirestoreFields({
+          vault_updated_at: new Date().toISOString()
+        })
+      });
+    } catch (e) {
+      console.warn('Failed to update vault timestamp:', e);
+    }
+  },
+
   // ---- Vault CRUD ----
 
   async listVault() {
@@ -495,6 +509,7 @@ const Api = {
 
     const doc = await this.firestoreRequest('POST', 'vault_items', { fields });
     const id = doc.name.split('/').pop();
+    await this.updateVaultTimestamp();
     return { id };
   },
 
@@ -518,11 +533,13 @@ const Api = {
     await this.firestoreRequest('PATCH', path, {
       fields: this.toFirestoreFields(fieldsToUpdate)
     });
+    await this.updateVaultTimestamp();
     return { success: true };
   },
 
   async deleteItem(id) {
     await this.firestoreRequest('DELETE', `vault_items/${id}`);
+    await this.updateVaultTimestamp();
     return { success: true };
   },
 
@@ -577,6 +594,7 @@ const Api = {
     });
 
     await this.firestoreRequest('POST', ':commit', { writes });
+    await this.updateVaultTimestamp();
     return {
       success: true,
       imported: writes.length,

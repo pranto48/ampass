@@ -458,9 +458,20 @@
   // ===== Load Vault =====
   async function loadVault() {
     try {
-      const result = await Api.listVault();
-      vaultItems = result.items || [];
-      await invoke('save_vault_cache', { encryptedItemsJson: JSON.stringify(vaultItems) });
+      const cached = await invoke('load_vault_cache');
+      const cachedUpdatedAt = localStorage.getItem('vault_updated_at');
+      const serverUpdatedAt = derivationParams && derivationParams.vault_updated_at;
+
+      if (cached && cachedUpdatedAt && serverUpdatedAt && cachedUpdatedAt === serverUpdatedAt) {
+        vaultItems = JSON.parse(cached);
+      } else {
+        const result = await Api.listVault();
+        vaultItems = result.items || [];
+        await invoke('save_vault_cache', { encryptedItemsJson: JSON.stringify(vaultItems) });
+        if (serverUpdatedAt) {
+          localStorage.setItem('vault_updated_at', serverUpdatedAt);
+        }
+      }
     } catch (e) {
       const cached = await invoke('load_vault_cache');
       if (cached) { vaultItems = JSON.parse(cached); toast('Offline — cached data'); }

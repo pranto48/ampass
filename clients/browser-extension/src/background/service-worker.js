@@ -394,12 +394,45 @@ async function initializeVault(masterPassword, currentParams) {
 }
 
 async function fetchVaultItems() {
+  const cachedItems = await Storage.getEncryptedVaultCache();
+  const cachedUpdatedAt = await Storage.getLocal('vault_updated_at');
+  
+  const uid = await Storage.getLocal('firebaseUid');
+  let freshParams = null;
+  
+  if (uid) {
+    try {
+      const doc = await ApiClient.firestoreRequest('GET', `user_security/${uid}`);
+      freshParams = ApiClient.fromFirestoreFields(doc.fields);
+    } catch (e) {
+      console.warn('Could not fetch fresh user security params, trying offline cache:', e);
+      if (cachedItems && cachedItems.length > 0) {
+        cachedVaultItems = cachedItems;
+        lastFetchTime = Date.now();
+        return;
+      }
+      throw e;
+    }
+  }
+
+  const serverUpdatedAt = freshParams && freshParams.vault_updated_at;
+
+  if (cachedItems && cachedItems.length > 0 && cachedUpdatedAt && serverUpdatedAt && cachedUpdatedAt === serverUpdatedAt) {
+    cachedVaultItems = cachedItems;
+    lastFetchTime = Date.now();
+    return;
+  }
+
   const result = await ApiClient.listVault();
   cachedVaultItems = result.items || [];
   lastFetchTime = Date.now();
+
   // Save to persistent offline cache
   if (cachedVaultItems.length > 0) {
     await Storage.setEncryptedVaultCache(cachedVaultItems);
+  }
+  if (serverUpdatedAt) {
+    await Storage.setLocal('vault_updated_at', serverUpdatedAt);
   }
 }
 

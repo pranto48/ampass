@@ -1,13 +1,13 @@
 @echo off
 REM AMPass Native Messaging Host - Windows Installation Script
-REM Run as Administrator
+REM Installs to Local AppData so Administrator privileges are NOT required.
 
 echo ============================================
 echo  AMPass Native Messaging Host Installer
 echo ============================================
 echo.
 
-SET INSTALL_DIR=%ProgramFiles%\AMPass
+SET INSTALL_DIR=%LOCALAPPDATA%\AMPass
 SET MANIFEST_DIR=%INSTALL_DIR%
 SET HOST_NAME=com.ampass.desktop
 
@@ -25,8 +25,8 @@ if exist "ampass-desktop.exe" (
     echo or: cargo build --release (in clients/desktop-tauri/src-tauri)
 )
 
-REM Copy Chrome manifest
-copy /Y "chrome-host-manifest.json" "%MANIFEST_DIR%\chrome-host-manifest.json"
+REM Copy Chrome manifest and replace placeholder path with dynamic absolute path
+powershell -NoProfile -Command "(Get-Content chrome-host-manifest.json) -replace 'C:\\\\Program Files\\\\AMPass\\\\ampass-desktop.exe', ($env:LOCALAPPDATA + '\\AMPass\\ampass-desktop.exe').Replace('\', '\\') | Set-Content '%MANIFEST_DIR%\chrome-host-manifest.json'"
 
 REM Register for Chrome
 REG ADD "HKCU\Software\Google\Chrome\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\chrome-host-manifest.json" /f
@@ -36,7 +36,7 @@ REG ADD "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\%HOST_NAME%" /ve /t R
 
 REM Register for Firefox (if manifest exists)
 if exist "firefox-host-manifest.json" (
-    copy /Y "firefox-host-manifest.json" "%MANIFEST_DIR%\firefox-host-manifest.json"
+    powershell -NoProfile -Command "(Get-Content firefox-host-manifest.json) -replace 'C:\\\\Program Files\\\\AMPass\\\\ampass-desktop.exe', ($env:LOCALAPPDATA + '\\AMPass\\ampass-desktop.exe').Replace('\', '\\') | Set-Content '%MANIFEST_DIR%\firefox-host-manifest.json'"
     REG ADD "HKCU\Software\Mozilla\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\firefox-host-manifest.json" /f
 )
 

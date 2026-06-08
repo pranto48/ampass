@@ -19,16 +19,24 @@ HOST_NAME="com.ampass.desktop"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
-BINARY_PATH="$WORKSPACE_DIR/clients/desktop-tauri/src-tauri/target/release/bundle/macos/AMPass.app/Contents/MacOS/AMPass"
-
-if [ ! -f "$BINARY_PATH" ]; then
+BINARY_PATH=""
+if [ -f "/Applications/AMPass.app/Contents/MacOS/ampass-desktop" ]; then
+    BINARY_PATH="/Applications/AMPass.app/Contents/MacOS/ampass-desktop"
+elif [ -f "/Applications/AMPass.app/Contents/MacOS/AMPass" ]; then
+    BINARY_PATH="/Applications/AMPass.app/Contents/MacOS/AMPass"
+elif [ -f "$HOME/Applications/AMPass.app/Contents/MacOS/ampass-desktop" ]; then
+    BINARY_PATH="$HOME/Applications/AMPass.app/Contents/MacOS/ampass-desktop"
+elif [ -f "$HOME/Applications/AMPass.app/Contents/MacOS/AMPass" ]; then
+    BINARY_PATH="$HOME/Applications/AMPass.app/Contents/MacOS/AMPass"
+elif [ -f "$WORKSPACE_DIR/clients/desktop-tauri/src-tauri/target/release/bundle/macos/AMPass.app/Contents/MacOS/AMPass" ]; then
+    BINARY_PATH="$WORKSPACE_DIR/clients/desktop-tauri/src-tauri/target/release/bundle/macos/AMPass.app/Contents/MacOS/AMPass"
+elif [ -f "$WORKSPACE_DIR/clients/desktop-tauri/src-tauri/target/release/ampass-desktop" ]; then
     BINARY_PATH="$WORKSPACE_DIR/clients/desktop-tauri/src-tauri/target/release/ampass-desktop"
 fi
 
-if [ ! -f "$BINARY_PATH" ]; then
-    echo "ERROR: AMPass binary not found at:"
-    echo "  $BINARY_PATH"
-    echo "Please build the Tauri app first using:"
+if [ -z "$BINARY_PATH" ]; then
+    echo "ERROR: AMPass binary not found."
+    echo "Please install AMPass to /Applications or build the Tauri app first using:"
     echo "  cd clients/desktop-tauri && npm run build"
     exit 1
 fi
