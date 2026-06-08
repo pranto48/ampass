@@ -20,7 +20,7 @@ REM Remove Firefox registry entry
 REG DELETE "HKCU\Software\Mozilla\NativeMessagingHosts\%HOST_NAME%" /f 2>nul
 
 REM Remove installed files
-if exist "%INSTALL_DIR%\ampass-native-host.exe" del /F "%INSTALL_DIR%\ampass-native-host.exe"
+if exist "%INSTALL_DIR%\ampass-desktop.exe" del /F "%INSTALL_DIR%\ampass-desktop.exe"
 if exist "%INSTALL_DIR%\chrome-host-manifest.json" del /F "%INSTALL_DIR%\chrome-host-manifest.json"
 if exist "%INSTALL_DIR%\firefox-host-manifest.json" del /F "%INSTALL_DIR%\firefox-host-manifest.json"
 

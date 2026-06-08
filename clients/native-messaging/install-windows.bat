@@ -15,12 +15,14 @@ REM Create install directory
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 REM Copy the native host executable (must be built first)
-if exist "ampass-native-host.exe" (
-    copy /Y "ampass-native-host.exe" "%INSTALL_DIR%\ampass-native-host.exe"
+if exist "ampass-desktop.exe" (
+    copy /Y "ampass-desktop.exe" "%INSTALL_DIR%\ampass-desktop.exe"
+) else if exist "..\desktop-tauri\src-tauri\target\release\ampass-desktop.exe" (
+    copy /Y "..\desktop-tauri\src-tauri\target\release\ampass-desktop.exe" "%INSTALL_DIR%\ampass-desktop.exe"
 ) else (
-    echo WARNING: ampass-native-host.exe not found in current directory.
-    echo Build it first with: cargo build --release
-    echo Then copy from target\release\ampass-native-host.exe
+    echo WARNING: ampass-desktop.exe not found.
+    echo Build it first with: npm run build (in clients/desktop-tauri)
+    echo or: cargo build --release (in clients/desktop-tauri/src-tauri)
 )
 
 REM Copy Chrome manifest
