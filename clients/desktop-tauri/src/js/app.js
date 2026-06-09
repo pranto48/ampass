@@ -1343,8 +1343,6 @@
   // Load persisted settings on startup
   async function loadSettings() {
     try {
-      const raw = await invoke('load_derivation_params'); // reuse secure config slot
-      // Use a dedicated settings key via save_config instead
       const stored = await storage_load_settings();
       if (stored) {
         appSettings = { ...appSettings, ...stored };
@@ -1358,16 +1356,30 @@
 
   async function storage_load_settings() {
     try {
-      const val = await invoke('load_derivation_params'); // placeholder — use local storage workaround
-      const ls = localStorage.getItem('ampass_settings');
-      return ls ? JSON.parse(ls) : null;
-    } catch { return null; }
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        const storedStr = await invoke('load_settings');
+        if (storedStr) {
+          return JSON.parse(storedStr);
+        }
+      }
+    } catch (e) {
+      console.warn("Backend load_settings failed, falling back to localStorage:", e);
+    }
+    const ls = localStorage.getItem('ampass_settings');
+    return ls ? JSON.parse(ls) : null;
   }
 
-  function saveSettings() {
+  async function saveSettings() {
     appSettings.lockTimeoutMin = parseInt(document.getElementById('setLockMin')?.value || '15');
     appSettings.clipboardClearSec = parseInt(document.getElementById('setClipSec')?.value || '30');
     localStorage.setItem('ampass_settings', JSON.stringify(appSettings));
+    try {
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        await invoke('save_settings', { settingsJson: JSON.stringify(appSettings) });
+      }
+    } catch (e) {
+      console.warn("Backend save_settings failed:", e);
+    }
     toast('Settings saved');
   }
 

@@ -315,10 +315,35 @@ const NativeClient = {
   /**
    * Handle incoming response from native host
    */
-  _handleResponse(msg) {
+  async _handleResponse(msg) {
     const requestId = msg.request_id;
     if (!requestId || !this._pendingRequests.has(requestId)) {
-      // Unsolicited message — ignore
+      // Unsolicited message — check if encrypted payload
+      if (msg.type === 'encrypted_payload' && msg.data?.ciphertext && msg.data?.iv) {
+        try {
+          if (!this._sessionKey) {
+            return; // No session key to decrypt
+          }
+          const respCiphertext = this._hexToBuffer(msg.data.ciphertext);
+          const respIv = this._hexToBuffer(msg.data.iv);
+
+          const decryptedBuffer = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: respIv },
+            this._sessionKey,
+            respCiphertext
+          );
+
+          const decryptedStr = this._unpad(new Uint8Array(decryptedBuffer));
+          const innerMsg = JSON.parse(decryptedStr);
+          if (innerMsg.type === 'CRITICAL_VAULT_LOCK_EVENT') {
+            if (typeof globalThis.onCriticalVaultLock === 'function') {
+              globalThis.onCriticalVaultLock();
+            }
+          }
+        } catch (e) {
+          console.error('Failed to decrypt unsolicited message:', e);
+        }
+      }
       return;
     }
 

@@ -91,6 +91,16 @@ async fn clear_derivation_params() -> Result<(), String> {
     storage::delete_secure_config("derivation_params")
 }
 
+#[tauri::command]
+async fn save_settings(settings_json: String) -> Result<(), String> {
+    storage::save_config("settings", &settings_json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn load_settings() -> Result<Option<String>, String> {
+    storage::load_config("settings").map_err(|e| e.to_string())
+}
+
 /// Check if a trusted session exists (token + server_url + derivation_params).
 /// Used by frontend to decide whether to show Unlock or Login screen.
 #[tauri::command]
@@ -150,8 +160,16 @@ async fn unlock_vault(vault_key_hex: String, state: tauri::State<'_, AppState>) 
 
 #[tauri::command]
 async fn lock_vault(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    // SECURITY: Clear vault key from memory
-    *state.vault_key.lock().map_err(|e| e.to_string())? = None;
+    // SECURITY: Zero-fill vault key and clear from memory
+    if let Ok(mut key_guard) = state.vault_key.lock() {
+        if let Some(ref mut key) = *key_guard {
+            let bytes = unsafe { key.as_mut_vec() };
+            for byte in bytes.iter_mut() {
+                unsafe { std::ptr::write_volatile(byte, 0); }
+            }
+        }
+        *key_guard = None;
+    }
     *state.locked.lock().map_err(|e| e.to_string())? = true;
     let _ = storage::delete_session_file();
     Ok(())
@@ -710,6 +728,8 @@ pub fn run() {
             store_derivation_params,
             load_derivation_params,
             clear_derivation_params,
+            save_settings,
+            load_settings,
             has_trusted_session,
             save_user_summary,
             load_user_summary,

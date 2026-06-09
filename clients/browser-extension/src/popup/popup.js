@@ -876,6 +876,14 @@
     fill.style.background = score >= 80 ? '#22c55e' : score >= 60 ? '#84cc16' : score >= 40 ? '#f59e0b' : '#ef4444';
   }
 
+  // ===== Runtime Messages =====
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'VAULT_LOCKED') {
+      showView('viewUnlock');
+      showStatus('Vault locked due to inactivity', 'warning');
+    }
+  });
+
   // ===== Init =====
   init();
 })();

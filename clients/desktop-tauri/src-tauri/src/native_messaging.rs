@@ -541,6 +541,9 @@ pub fn run_native_messaging_loop(
 
                     // Create AES-GCM cipher
                     let cipher = Aes256Gcm::new(GenericArray::from_slice(locked_secret.as_slice()));
+                    if let Ok(mut guard) = SESSION_CIPHER.lock() {
+                        *guard = Some(cipher.clone());
+                    }
                     session_cipher = Some(cipher);
 
                     let response = NativeResponse::ok("handshake_response", serde_json::json!({
@@ -726,4 +729,52 @@ pub fn run_native_messaging_loop(
             }
         }
     }
+}
+
+/// Global static store to cache the E2EE session cipher for unsolicited events
+static SESSION_CIPHER: std::sync::Mutex<Option<Aes256Gcm>> = std::sync::Mutex::new(None);
+
+/// Pushes an encrypted CRITICAL_VAULT_LOCK_EVENT message to the browser extension
+pub fn send_critical_lock_event() {
+    use rand::Rng;
+    let cipher_guard = match SESSION_CIPHER.lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+
+    let cipher = match &*cipher_guard {
+        Some(c) => c,
+        None => return, // No active session established yet
+    };
+
+    let event_payload = serde_json::json!({
+        "type": "CRITICAL_VAULT_LOCK_EVENT",
+        "payload": {}
+    });
+
+    let event_bytes = match serde_json::to_vec(&event_payload) {
+        Ok(bytes) => bytes,
+        Err(_) => return,
+    };
+
+    let mut padded = event_bytes;
+    pad(&mut padded, 16);
+
+    let mut resp_iv = [0u8; 12];
+    rand::thread_rng().fill(&mut resp_iv);
+    let resp_nonce = Nonce::from_slice(&resp_iv);
+
+    let encrypted_bytes = match cipher.encrypt(resp_nonce, padded.as_slice()) {
+        Ok(bytes) => bytes,
+        Err(_) => return,
+    };
+
+    let response_payload = serde_json::json!({
+        "ciphertext": hex::encode(encrypted_bytes),
+        "iv": hex::encode(resp_iv)
+    });
+
+    // An unsolicited event has no request_id
+    let response = NativeResponse::ok("encrypted_payload", response_payload, None);
+    let _ = write_response(&response);
 }

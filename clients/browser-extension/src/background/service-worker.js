@@ -943,3 +943,24 @@ async function getAutofillSettings() {
     allowHttpAutofill: !!settings.allowHttpAutofill
   };
 }
+
+// ===== Critical OS Inactivity Watchdog Auto-Lock Event =====
+globalThis.onCriticalVaultLock = async function() {
+  console.log('CRITICAL: Received vault lock event from native host. Locking extension.');
+  await lock();
+  
+  // Close any tabs that are showing extension pages (options page, options tab, etc.)
+  const extensionPrefix = chrome.runtime.getURL('');
+  chrome.tabs.query({}, (tabs) => {
+    if (tabs) {
+      for (const tab of tabs) {
+        if (tab.url && tab.url.startsWith(extensionPrefix)) {
+          chrome.tabs.remove(tab.id).catch(() => {});
+        }
+      }
+    }
+  });
+
+  // Notify any active extension pages (like the popup if it's currently open)
+  chrome.runtime.sendMessage({ type: 'VAULT_LOCKED' }).catch(() => {});
+};
