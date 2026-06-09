@@ -66,7 +66,7 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'src/popup/index.html'),
         options: resolve(__dirname, 'src/options/options.html'),
-        background: resolve(__dirname, 'src/background/service-worker-entry.js'),
+        background: resolve(__dirname, 'src/background/service-worker.js'),
         autofill: resolve(__dirname, 'src/content/autofill.js'),
         'form-detector': resolve(__dirname, 'src/content/form-detector.js'),
         'save-detector': resolve(__dirname, 'src/content/save-detector.js')

@@ -3,16 +3,13 @@
  * SECURITY: Holds vault key in memory. Handles all crypto operations.
  * Content scripts and popup communicate via chrome.runtime messages.
  */
-
-importScripts(
-  '../shared/storage.js',
-  '../shared/security.js',
-  '../shared/domain-utils.js',
-  '../shared/crypto-client.js',
-  '../shared/api-client.js',
-  '../shared/password-generator.js',
-  '../shared/native-client.js'
-);
+import '../shared/storage.js';
+import '../shared/security.js';
+import '../shared/domain-utils.js';
+import '../shared/crypto-client.js';
+import '../shared/api-client.js';
+import '../shared/password-generator.js';
+import '../shared/native-client.js';
 
 // ===== State =====
 let cachedVaultItems = null;
