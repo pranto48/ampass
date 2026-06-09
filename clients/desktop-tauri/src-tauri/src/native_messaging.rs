@@ -11,6 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
+use x25519_dalek::{EphemeralSecret, PublicKey};
+use aes_gcm::{Aes256Gcm, aead::Aead, Nonce};
 
 /// Maximum message size (1MB - Chrome's limit)
 const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
@@ -31,6 +33,8 @@ const ALLOWED_TYPES: &[&str] = &[
     "update_detected_login",
     "generate_password",
     "audit_event",
+    "handshake_init",
+    "encrypted_payload",
 ];
 
 /// Incoming message from extension
@@ -372,26 +376,339 @@ pub fn process_message(
     }
 }
 
+/// OS-level memory locked buffer to prevent swapping sensitive data to disk
+pub struct LockedBuffer {
+    data: Vec<u8>,
+}
+
+impl LockedBuffer {
+    pub fn new(data: Vec<u8>) -> Self {
+        let mut lb = Self { data };
+        lb.lock();
+        lb
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
+    fn lock(&mut self) {
+        if self.data.is_empty() {
+            return;
+        }
+        let addr = self.data.as_ptr() as *const std::ffi::c_void;
+        let len = self.data.len();
+
+        #[cfg(target_os = "windows")]
+        unsafe {
+            extern "system" {
+                fn VirtualLock(lpaddress: *const std::ffi::c_void, dwsize: usize) -> i32;
+            }
+            let _ = VirtualLock(addr, len);
+        }
+
+        #[cfg(target_os = "macos")]
+        unsafe {
+            extern "C" {
+                fn mlock(addr: *const std::ffi::c_void, len: usize) -> std::os::raw::c_int;
+            }
+            let _ = mlock(addr, len);
+        }
+    }
+
+    fn unlock(&mut self) {
+        if self.data.is_empty() {
+            return;
+        }
+        let addr = self.data.as_ptr() as *const std::ffi::c_void;
+        let len = self.data.len();
+
+        #[cfg(target_os = "windows")]
+        unsafe {
+            extern "system" {
+                fn VirtualUnlock(lpaddress: *const std::ffi::c_void, dwsize: usize) -> i32;
+            }
+            let _ = VirtualUnlock(addr, len);
+        }
+
+        #[cfg(target_os = "macos")]
+        unsafe {
+            extern "C" {
+                fn munlock(addr: *const std::ffi::c_void, len: usize) -> std::os::raw::c_int;
+            }
+            let _ = munlock(addr, len);
+        }
+    }
+}
+
+impl Drop for LockedBuffer {
+    fn drop(&mut self) {
+        // Zero-fill using volatile writes to prevent compiler optimization
+        for byte in self.data.iter_mut() {
+            unsafe {
+                std::ptr::write_volatile(byte, 0);
+            }
+        }
+        self.unlock();
+    }
+}
+
+fn pad(data: &mut Vec<u8>, block_size: usize) {
+    let padding_len = block_size - (data.len() % block_size);
+    data.extend(std::iter::repeat(padding_len as u8).take(padding_len));
+}
+
+fn unpad(data: &[u8]) -> Result<Vec<u8>, String> {
+    if data.is_empty() {
+        return Err("Empty data for unpadding".to_string());
+    }
+    let padding_len = data[data.len() - 1] as usize;
+    if padding_len == 0 || padding_len > data.len() {
+        return Err("Invalid PKCS#7 padding length".to_string());
+    }
+    for &byte in &data[data.len() - padding_len..] {
+        if byte != padding_len as u8 {
+            return Err("Invalid PKCS#7 padding bytes".to_string());
+        }
+    }
+    Ok(data[..data.len() - padding_len].to_vec())
+}
+
 /// Run the native messaging host loop (called when app is launched with --native-messaging flag)
 /// This is a blocking loop that reads from stdin and writes to stdout.
 pub fn run_native_messaging_loop(
     get_vault_state: impl Fn() -> (bool, Option<String>),
     on_lock: impl Fn(),
 ) {
+    use aes_gcm::KeyInit;
+    use aes_gcm::aead::generic_array::GenericArray;
+    use rand::Rng;
+
+    let mut session_cipher: Option<Aes256Gcm> = None;
+
     loop {
         match read_message() {
             Ok(msg) => {
+                // Intercept handshake_init
+                if msg.msg_type == "handshake_init" {
+                    let peer_pub_hex = match msg.payload.get("public_key").and_then(|v| v.as_str()) {
+                        Some(key) => key,
+                        None => {
+                            let response = NativeResponse::err("handshake_response", "Missing public_key", msg.request_id.clone());
+                            let _ = write_response(&response);
+                            continue;
+                        }
+                    };
+
+                    let peer_pub_bytes = match hex::decode(peer_pub_hex) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            let response = NativeResponse::err("handshake_response", &format!("Invalid hex: {}", e), msg.request_id.clone());
+                            let _ = write_response(&response);
+                            continue;
+                        }
+                    };
+
+                    if peer_pub_bytes.len() != 32 {
+                        let response = NativeResponse::err("handshake_response", "Public key must be 32 bytes", msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+
+                    // Generate ephemeral keypair
+                    let secret = EphemeralSecret::random_from_rng(rand::thread_rng());
+                    let public = PublicKey::from(&secret);
+                    let our_pub_hex = hex::encode(public.as_bytes());
+
+                    // Derive shared secret
+                    let peer_pub_array: [u8; 32] = match peer_pub_bytes.try_into() {
+                        Ok(arr) => arr,
+                        Err(_) => {
+                            let response = NativeResponse::err("handshake_response", "Failed to convert public key", msg.request_id.clone());
+                            let _ = write_response(&response);
+                            continue;
+                        }
+                    };
+                    let peer_public = PublicKey::from(peer_pub_array);
+                    let shared_secret = secret.diffie_hellman(&peer_public);
+
+                    // Pin shared secret key in memory and zero it out on exit
+                    let mut locked_secret = LockedBuffer::new(shared_secret.as_bytes().to_vec());
+
+                    // Create AES-GCM cipher
+                    let cipher = Aes256Gcm::new(GenericArray::from_slice(locked_secret.as_slice()));
+                    session_cipher = Some(cipher);
+
+                    let response = NativeResponse::ok("handshake_response", serde_json::json!({
+                        "public_key": our_pub_hex
+                    }), msg.request_id.clone());
+
+                    if let Err(e) = write_response(&response) {
+                        eprintln!("Failed to write handshake response: {}", e);
+                        break;
+                    }
+                    continue;
+                }
+
+                // If not handshake, message must be encrypted_payload
+                if msg.msg_type != "encrypted_payload" {
+                    let response = NativeResponse::err("error", "Unauthorized message type: expected encrypted_payload or handshake_init", msg.request_id.clone());
+                    let _ = write_response(&response);
+                    continue;
+                }
+
+                let cipher = match &session_cipher {
+                    Some(c) => c,
+                    None => {
+                        let response = NativeResponse::err("error", "Symmetric session key not established. Perform handshake first.", msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                let ciphertext_hex = match msg.payload.get("ciphertext").and_then(|v| v.as_str()) {
+                    Some(ct) => ct,
+                    None => {
+                        let response = NativeResponse::err("error", "Missing ciphertext", msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                let iv_hex = match msg.payload.get("iv").and_then(|v| v.as_str()) {
+                    Some(iv) => iv,
+                    None => {
+                        let response = NativeResponse::err("error", "Missing iv", msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                let ciphertext = match hex::decode(ciphertext_hex) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Invalid ciphertext hex: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                let iv_bytes = match hex::decode(iv_hex) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Invalid iv hex: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                if iv_bytes.len() != 12 {
+                    let response = NativeResponse::err("error", "Nonce must be 12 bytes", msg.request_id.clone());
+                    let _ = write_response(&response);
+                    continue;
+                }
+
+                let nonce = Nonce::from_slice(&iv_bytes);
+
+                // Decrypt
+                let decrypted_padded = match cipher.decrypt(nonce, ciphertext.as_slice()) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Decryption failed: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                // Store raw decrypted padded bytes in locked memory
+                let mut locked_decrypted_padded = LockedBuffer::new(decrypted_padded);
+
+                // Unpad decrypted bytes
+                let decrypted = match unpad(locked_decrypted_padded.as_slice()) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Unpadding failed: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                // Store plaintext message in locked memory
+                let mut locked_decrypted = LockedBuffer::new(decrypted);
+
+                // Parse inner message
+                let inner_msg: NativeMessage = match serde_json::from_slice(locked_decrypted.as_slice()) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Failed to parse decrypted message: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                // Validate message type against allowlist
+                if !ALLOWED_TYPES.contains(&inner_msg.msg_type.as_str()) {
+                    let response = NativeResponse::err(&inner_msg.msg_type, "Unknown message type", msg.request_id.clone());
+                    let _ = write_response(&response);
+                    continue;
+                }
+
                 let (locked, vault_key) = get_vault_state();
 
                 // Handle lock command specially
-                if msg.msg_type == "lock" {
+                if inner_msg.msg_type == "lock" {
                     on_lock();
                 }
 
-                let response = process_message(&msg, locked, &vault_key);
+                // Process inner message to construct inner response
+                let inner_response = process_message(&inner_msg, locked, &vault_key);
+
+                // Serialize inner response
+                let inner_response_bytes = match serde_json::to_vec(&inner_response) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Failed to serialize inner response: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                // Store inner response in locked memory
+                let mut locked_inner_response = LockedBuffer::new(inner_response_bytes);
+
+                // Pad
+                let mut padded_response = locked_inner_response.as_slice().to_vec();
+                pad(&mut padded_response, 16);
+
+                let mut locked_padded_response = LockedBuffer::new(padded_response);
+
+                // Generate new random IV
+                let mut resp_iv = [0u8; 12];
+                rand::thread_rng().fill(&mut resp_iv);
+                let resp_nonce = Nonce::from_slice(&resp_iv);
+
+                // Encrypt response
+                let encrypted_bytes = match cipher.encrypt(resp_nonce, locked_padded_response.as_slice()) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        let response = NativeResponse::err("error", &format!("Failed to encrypt response: {}", e), msg.request_id.clone());
+                        let _ = write_response(&response);
+                        continue;
+                    }
+                };
+
+                let response_payload = serde_json::json!({
+                    "ciphertext": hex::encode(encrypted_bytes),
+                    "iv": hex::encode(resp_iv)
+                });
+
+                let response = NativeResponse::ok("encrypted_payload", response_payload, msg.request_id.clone());
 
                 if let Err(e) = write_response(&response) {
-                    // If we can't write, the connection is broken
                     eprintln!("Native messaging write error: {}", e);
                     break;
                 }

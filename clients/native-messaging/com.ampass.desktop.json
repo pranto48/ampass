@@ -1,0 +1,11 @@
+{
+  "name": "com.ampass.desktop",
+  "description": "AMPass Desktop App - Native Messaging Host",
+  "path": "C:\\Program Files\\AMPass\\ampass-desktop.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://abjmemohpnoinbhngjppnpbacjdmajmd/",
+    "chrome-extension://pmjlncjjocmhhocadbjafkllcnpcdnjg/",
+    "chrome-extension://kbkdfkleifdhojbpnhdidpgbjfpgdlla/"
+  ]
+}

@@ -91,10 +91,9 @@ if [ "$EXTENSION_ID" = "REPLACE_WITH_YOUR_EXTENSION_ID" ]; then
   "path": "$BINARY_PATH",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://pgbgflbgdbigekigbdfifidplpohhblg/",
-    "chrome-extension://hdbjdbpjldchglhllkgpkebgijndhogo/",
-    "chrome-extension://kgkldldplhdbjgclpohhblgjndhogo/",
-    "chrome-extension://REPLACE_WITH_YOUR_EXTENSION_ID/"
+    "chrome-extension://abjmemohpnoinbhngjppnpbacjdmajmd/",
+    "chrome-extension://pmjlncjjocmhhocadbjafkllcnpcdnjg/",
+    "chrome-extension://kbkdfkleifdhojbpnhdidpgbjfpgdlla/"
   ]
 }
 EOF
@@ -114,7 +113,7 @@ else
   "path": "$BINARY_PATH",
   "type": "stdio",
   "allowed_extensions": [
-    "ampass@example.com"
+    "ampass@ampass.local"
   ]
 }
 EOF

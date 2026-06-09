@@ -50,6 +50,45 @@ const NativeClient = {
     return this._available;
   },
 
+  _sessionKey: null,
+  _handshakePromise: null,
+
+  _bufferToHex(buffer) {
+    return Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
+  _hexToBuffer(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    }
+    return bytes;
+  },
+
+  _pad(dataStr, blockSize = 16) {
+    const encoder = new TextEncoder();
+    const dataBytes = encoder.encode(dataStr);
+    const paddingLen = blockSize - (dataBytes.length % blockSize);
+    const padded = new Uint8Array(dataBytes.length + paddingLen);
+    padded.set(dataBytes);
+    padded.fill(paddingLen, dataBytes.length);
+    return padded;
+  },
+
+  _unpad(paddedBytes) {
+    const paddingLen = paddedBytes[paddedBytes.length - 1];
+    if (paddingLen <= 0 || paddingLen > paddedBytes.length) {
+      throw new Error('Invalid padding');
+    }
+    for (let i = 0; i < paddingLen; i++) {
+      if (paddedBytes[paddedBytes.length - 1 - i] !== paddingLen) {
+        throw new Error('Invalid padding bytes');
+      }
+    }
+    const decoded = paddedBytes.slice(0, paddedBytes.length - paddingLen);
+    return new TextDecoder().decode(decoded);
+  },
+
   /**
    * Connect to the native host
    */
@@ -67,6 +106,8 @@ const NativeClient = {
         this._port = null;
         this._connected = false;
         this._available = false;
+        this._sessionKey = null;
+        this._handshakePromise = null;
         // Reject all pending requests
         for (const [id, { reject }] of this._pendingRequests) {
           reject(new Error('Native host disconnected'));
@@ -91,41 +132,103 @@ const NativeClient = {
       this._port = null;
     }
     this._connected = false;
+    this._sessionKey = null;
+    this._handshakePromise = null;
   },
 
   /**
-   * Send a message and wait for response (with timeout)
+   * Perform ephemeral ECDH (X25519) key exchange with native host
    */
-  sendMessage(message, timeoutMs = 5000) {
+  async _performHandshake() {
+    if (this._handshakePromise) {
+      return this._handshakePromise;
+    }
+
+    this._handshakePromise = (async () => {
+      // 1. Generate X25519 key pair
+      const keyPair = await crypto.subtle.generateKey(
+        { name: 'X25519' },
+        true,
+        ['deriveKey', 'deriveBits']
+      );
+
+      // 2. Export public key to hex
+      const rawPubKey = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+      const clientPubKeyHex = this._bufferToHex(new Uint8Array(rawPubKey));
+
+      // 3. Send handshake_init message to host
+      const handshakeMsg = {
+        type: 'handshake_init',
+        payload: { public_key: clientPubKeyHex }
+      };
+
+      const response = await this._sendRawMessage(handshakeMsg, 5000);
+      if (!response || !response.success || response.msg_type !== 'handshake_response') {
+        throw new Error('Handshake failed: invalid host response');
+      }
+
+      const serverPubKeyHex = response.data?.public_key;
+      if (!serverPubKeyHex) {
+        throw new Error('Handshake failed: missing host public key');
+      }
+
+      // 4. Import server public key
+      const serverPubKeyBytes = this._hexToBuffer(serverPubKeyHex);
+      const serverPubKey = await crypto.subtle.importKey(
+        'raw',
+        serverPubKeyBytes,
+        { name: 'X25519' },
+        true,
+        []
+      );
+
+      // 5. Derive shared secret bits
+      const sharedSecret = await crypto.subtle.deriveBits(
+        {
+          name: 'X25519',
+          public: serverPubKey
+        },
+        keyPair.privateKey,
+        256
+      );
+
+      // 6. Import shared secret as AES-GCM symmetric session key
+      this._sessionKey = await crypto.subtle.importKey(
+        'raw',
+        sharedSecret,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    })();
+
+    try {
+      await this._handshakePromise;
+    } finally {
+      this._handshakePromise = null;
+    }
+  },
+
+  /**
+   * Internal helper to send a raw JSON message without encryption
+   */
+  _sendRawMessage(message, timeoutMs = 5000) {
     return new Promise((resolve, reject) => {
-      if (!this._enabled) {
-        reject(new Error('Native messaging disabled'));
+      if (!this._port) {
+        reject(new Error('Port not connected'));
         return;
       }
 
-      if (!this._port) {
-        this.connect();
-      }
-
-      if (!this._port) {
-        reject(new Error('Cannot connect to native host'));
-        return;
-      }
-
-      // Add request ID for correlation
       const requestId = String(++this._requestCounter);
       message.request_id = requestId;
 
-      // Set up timeout
       const timer = setTimeout(() => {
         this._pendingRequests.delete(requestId);
         reject(new Error('Native messaging timeout'));
       }, timeoutMs);
 
-      // Store pending request
       this._pendingRequests.set(requestId, { resolve, reject, timer });
 
-      // Send message
       try {
         this._port.postMessage(message);
       } catch (e) {
@@ -134,6 +237,79 @@ const NativeClient = {
         reject(new Error('Failed to send native message'));
       }
     });
+  },
+
+  /**
+   * Send an E2EE encrypted message and wait for response (with timeout)
+   */
+  async sendMessage(message, timeoutMs = 5000) {
+    if (!this._enabled) {
+      throw new Error('Native messaging disabled');
+    }
+
+    if (!this._port) {
+      this.connect();
+    }
+
+    if (!this._port) {
+      throw new Error('Cannot connect to native host');
+    }
+
+    // Handshake check
+    if (message.type !== 'handshake_init' && !this._sessionKey) {
+      await this._performHandshake();
+    }
+
+    // Encrypt the message payload
+    const plaintext = JSON.stringify(message);
+    const padded = this._pad(plaintext, 16);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      this._sessionKey,
+      padded
+    );
+
+    const ciphertextHex = this._bufferToHex(new Uint8Array(ciphertextBuffer));
+    const ivHex = this._bufferToHex(iv);
+
+    // Construct the wrapped message
+    const wrappedMsg = {
+      type: 'encrypted_payload',
+      payload: {
+        ciphertext: ciphertextHex,
+        iv: ivHex
+      }
+    };
+
+    const response = await this._sendRawMessage(wrappedMsg, timeoutMs);
+    if (!response || !response.success) {
+      throw new Error(response?.error || 'Native message error');
+    }
+
+    if (response.msg_type !== 'encrypted_payload') {
+      throw new Error('Expected encrypted payload from native host');
+    }
+
+    const respCiphertextHex = response.data?.ciphertext;
+    const respIvHex = response.data?.iv;
+
+    if (!respCiphertextHex || !respIvHex) {
+      throw new Error('Invalid encrypted response format');
+    }
+
+    const respCiphertext = this._hexToBuffer(respCiphertextHex);
+    const respIv = this._hexToBuffer(respIvHex);
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: respIv },
+      this._sessionKey,
+      respCiphertext
+    );
+
+    const decryptedStr = this._unpad(new Uint8Array(decryptedBuffer));
+    return JSON.parse(decryptedStr);
   },
 
   /**

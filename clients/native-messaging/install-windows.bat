@@ -26,18 +26,18 @@ if exist "ampass-desktop.exe" (
 )
 
 REM Copy Chrome manifest and replace placeholder path with dynamic absolute path
-powershell -NoProfile -Command "(Get-Content chrome-host-manifest.json) -replace 'C:\\\\Program Files\\\\AMPass\\\\ampass-desktop.exe', ($env:LOCALAPPDATA + '\\AMPass\\ampass-desktop.exe').Replace('\', '\\') | Set-Content '%MANIFEST_DIR%\chrome-host-manifest.json'"
+powershell -NoProfile -Command "(Get-Content com.ampass.desktop.json) -replace 'C:\\\\Program Files\\\\AMPass\\\\ampass-desktop.exe', ($env:LOCALAPPDATA + '\\AMPass\\ampass-desktop.exe').Replace('\', '\\') | Set-Content '%MANIFEST_DIR%\com.ampass.desktop.json'"
 
 REM Register for Chrome
-REG ADD "HKCU\Software\Google\Chrome\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\chrome-host-manifest.json" /f
+REG ADD "HKCU\Software\Google\Chrome\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\com.ampass.desktop.json" /f
 
 REM Register for Edge (uses same registry path pattern as Chrome)
-REG ADD "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\chrome-host-manifest.json" /f
+REG ADD "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\com.ampass.desktop.json" /f
 
 REM Register for Firefox (if manifest exists)
-if exist "firefox-host-manifest.json" (
-    powershell -NoProfile -Command "(Get-Content firefox-host-manifest.json) -replace 'C:\\\\Program Files\\\\AMPass\\\\ampass-desktop.exe', ($env:LOCALAPPDATA + '\\AMPass\\ampass-desktop.exe').Replace('\', '\\') | Set-Content '%MANIFEST_DIR%\firefox-host-manifest.json'"
-    REG ADD "HKCU\Software\Mozilla\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\firefox-host-manifest.json" /f
+if exist "com.ampass.desktop-firefox.json" (
+    powershell -NoProfile -Command "(Get-Content com.ampass.desktop-firefox.json) -replace 'C:\\\\Program Files\\\\AMPass\\\\ampass-desktop.exe', ($env:LOCALAPPDATA + '\\AMPass\\ampass-desktop.exe').Replace('\', '\\') | Set-Content '%MANIFEST_DIR%\com.ampass.desktop-firefox.json'"
+    REG ADD "HKCU\Software\Mozilla\NativeMessagingHosts\%HOST_NAME%" /ve /t REG_SZ /d "%MANIFEST_DIR%\com.ampass.desktop-firefox.json" /f
 )
 
 echo.
@@ -45,7 +45,7 @@ echo ============================================
 echo  Installation complete!
 echo.
 echo  IMPORTANT: Edit the manifest file to add your extension ID:
-echo  %MANIFEST_DIR%\chrome-host-manifest.json
+echo  %MANIFEST_DIR%\com.ampass.desktop.json
 echo.
 echo  Replace REPLACE_WITH_YOUR_EXTENSION_ID with your actual extension ID.
 echo  Find it at chrome://extensions/ (Developer mode enabled)

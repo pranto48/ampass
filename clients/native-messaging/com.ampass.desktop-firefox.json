@@ -1,0 +1,9 @@
+{
+  "name": "com.ampass.desktop",
+  "description": "AMPass Desktop App - Native Messaging Host",
+  "path": "C:\\Program Files\\AMPass\\ampass-desktop.exe",
+  "type": "stdio",
+  "allowed_extensions": [
+    "ampass@ampass.local"
+  ]
+}
