@@ -1,0 +1,20 @@
+{
+  "name": "ampass-monorepo",
+  "version": "1.107.0",
+  "private": true,
+  "workspaces": [
+    "clients/desktop-tauri",
+    "clients/browser-extension"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "dev:desktop": "npm run dev --workspace=ampass-desktop",
+    "dev:extension": "npm run dev --workspace=ampass-extension",
+    "audit:ci": "npm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.4"
+  }
+}

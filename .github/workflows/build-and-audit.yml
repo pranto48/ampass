@@ -1,0 +1,66 @@
+name: Build Pipeline & Security Audit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  security-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+
+  test-and-build:
+    name: Build & Test Workspace
+    needs: security-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install System Dependencies (Tauri Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Run Extension Unit Tests (Vitest)
+        run: npm run test --workspace=ampass-extension
+
+      - name: Run Rust Backend Unit Tests
+        run: cargo test --manifest-path clients/desktop-tauri/src-tauri/Cargo.toml
+
+      - name: Build Browser Extension (Vite Obfuscated MV3)
+        run: npm run build --workspace=ampass-extension
+
+      - name: Build Desktop Client (Tauri Backend)
+        run: npm run build --workspace=ampass-desktop
