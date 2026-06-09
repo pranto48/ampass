@@ -677,7 +677,38 @@ async fn list_installed_apps() -> Result<Vec<serde_json::Value>, String> {
 }
 
 pub fn run() {
+    // OS-Level Anti-Dumping and Anti-Debugging Controls
+    #[cfg(target_os = "linux")]
+    {
+        unsafe {
+            // PR_SET_DUMPABLE = 4. Disables core dumps and ptrace attachment.
+            libc::prctl(4, 0, 0, 0, 0);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        unsafe {
+            extern "C" {
+                fn ptrace(request: i32, pid: i32, addr: *mut u8, data: i32) -> i32;
+            }
+            // PT_DENY_ATTACH = 31. Terminates process if debugger tries to attach.
+            ptrace(31, 0, std::ptr::null_mut(), 0);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        unsafe {
+            if windows_sys::Win32::System::Diagnostics::Debug::IsDebuggerPresent() != 0 {
+                // Exit immediately if a debugger is attached to protect memory space
+                std::process::exit(1);
+            }
+        }
+    }
+
     let args: Vec<String> = std::env::args().collect();
+
     let is_native_messaging = args.iter().any(|arg| {
         arg == "--native-messaging" 
             || arg.starts_with("chrome-extension://") 

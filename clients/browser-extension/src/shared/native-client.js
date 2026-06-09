@@ -103,6 +103,10 @@ const NativeClient = {
       });
 
       this._port.onDisconnect.addListener(() => {
+        if (chrome.runtime.lastError) {
+          console.warn('Native bridge disconnected:', chrome.runtime.lastError.message);
+        }
+
         this._port = null;
         this._connected = false;
         this._available = false;
@@ -113,6 +117,16 @@ const NativeClient = {
           reject(new Error('Native host disconnected'));
         }
         this._pendingRequests.clear();
+
+        // Persistent MV3 service worker reconnect loop
+        if (this._enabled) {
+          setTimeout(() => {
+            if (this._enabled && !this._port) {
+              console.log('Attempting automatic native bridge reconnection...');
+              this.connect();
+            }
+          }, 100);
+        }
       });
 
       this._connected = true;

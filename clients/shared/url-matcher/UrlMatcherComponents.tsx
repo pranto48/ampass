@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { SegregatedMatches } from './UrlMatcher';
 
 interface QuickFillIconProps {
@@ -347,3 +348,83 @@ export const AdvancedVaultView: React.FC<AdvancedVaultViewProps> = ({ matches, o
     </div>
   );
 };
+
+/**
+ * Heuristic check to verify host page elements do not have clickjacking styles.
+ */
+export const checkClickjacking = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const htmlStyle = window.getComputedStyle(document.documentElement);
+    const bodyStyle = window.getComputedStyle(document.body);
+
+    const isSuspicious = (style: CSSStyleDeclaration) => {
+      const opacity = parseFloat(style.opacity);
+      if (!isNaN(opacity) && opacity < 0.1) return true;
+      if (style.visibility === 'hidden') return true;
+      if (style.display === 'none') return true;
+      if (style.pointerEvents === 'none') return true;
+      return false;
+    };
+
+    if (isSuspicious(htmlStyle) || isSuspicious(bodyStyle)) {
+      console.warn("AMPass Watchdog: Clickjacking attempt detected via HTML/Body style masking! Aborting render.");
+      return true;
+    }
+  } catch (e) {
+    // Suppress styles resolution errors
+  }
+  return false;
+};
+
+interface ClosedShadowRootProps {
+  children: React.ReactNode;
+  styleContent?: string;
+}
+
+/**
+ * Closed Shadow DOM Wrapper to encapsulate children and protect against DOM traversal.
+ */
+export const ClosedShadowRoot: React.FC<ClosedShadowRootProps> = ({ children, styleContent }) => {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [shadowRoot, setShadowRoot] = useState<ShadowRoot | null>(null);
+
+  useEffect(() => {
+    if (hostRef.current && !shadowRoot) {
+      if (checkClickjacking()) return;
+      
+      const root = hostRef.current.attachShadow({ mode: 'closed' });
+      
+      if (styleContent) {
+        const style = document.createElement('style');
+        style.textContent = styleContent;
+        root.appendChild(style);
+      }
+      
+      setShadowRoot(root);
+    }
+  }, [styleContent, shadowRoot]);
+
+  return (
+    <div ref={hostRef} style={{ display: 'contents' }}>
+      {shadowRoot && createPortal(children, shadowRoot as unknown as Element)}
+    </div>
+  );
+};
+
+export const SecureQuickFillIcon: React.FC<QuickFillIconProps> = (props) => {
+  return (
+    <ClosedShadowRoot styleContent="* { box-sizing: border-box; }">
+      <QuickFillIcon {...props} />
+    </ClosedShadowRoot>
+  );
+};
+
+export const SecureAdvancedVaultView: React.FC<AdvancedVaultViewProps> = (props) => {
+  return (
+    <ClosedShadowRoot styleContent="* { box-sizing: border-box; }">
+      <AdvancedVaultView {...props} />
+    </ClosedShadowRoot>
+  );
+};
+

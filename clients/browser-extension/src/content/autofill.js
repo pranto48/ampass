@@ -243,19 +243,25 @@
       return;
     }
 
-    // Set value using native setter (bypasses React/Vue controlled components)
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype, 'value'
-    ).set;
+    // Set value using native prototype setter (bypasses React/Vue controlled components)
+    const targetPrototype = field instanceof HTMLTextAreaElement 
+      ? HTMLTextAreaElement.prototype 
+      : HTMLInputElement.prototype;
+    const nativeSetter = Object.getOwnPropertyDescriptor(targetPrototype, 'value')?.set;
 
     // Simulate typing: compositionstart -> input -> compositionend
     // This pattern is required by some React/Angular forms that track composition events
     field.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
     
-    nativeInputValueSetter.call(field, value);
+    if (nativeSetter) {
+      nativeSetter.call(field, value);
+    } else {
+      field.value = value;
+    }
 
     // Dispatch events in the correct order for framework compatibility
     // InputEvent is needed for React 17+ which listens to the native input event
+    // Manually dispatch untrusted input and change events for SPA frameworks to register securely.
     field.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: value }));
     field.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: value }));
     field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));

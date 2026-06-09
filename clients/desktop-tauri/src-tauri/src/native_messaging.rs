@@ -778,3 +778,100 @@ pub fn send_critical_lock_event() {
     let response = NativeResponse::ok("encrypted_payload", response_payload, None);
     let _ = write_response(&response);
 }
+
+/// Hardens Windows Named Pipe initialization using custom SECURITY_ATTRIBUTES
+/// and a strict DACL that limits access strictly to the current user's Logon SID and SYSTEM.
+#[cfg(target_os = "windows")]
+pub fn create_hardened_named_pipe(pipe_name: &str) -> Result<std::fs::File, String> {
+    use std::os::windows::io::FromRawHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE, TRUE};
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenUser, TOKEN_USER, TOKEN_QUERY,
+        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+        SECURITY_ATTRIBUTES
+    };
+    use windows_sys::Win32::System::Pipes::{
+        CreateNamedPipeW, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE, PIPE_READMODE_BYTE, PIPE_WAIT
+    };
+
+    // Import LocalFree from Windows SystemServices/Foundation
+    extern "system" {
+        fn LocalFree(hmem: isize) -> isize;
+    }
+
+    unsafe {
+        let mut token_handle = 0isize;
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token_handle) == 0 {
+            return Err("Failed to open process token".to_string());
+        }
+
+        let mut req_len = 0u32;
+        GetTokenInformation(token_handle, TokenUser, std::ptr::null_mut(), 0, &mut req_len);
+        
+        let mut buf = vec![0u8; req_len as usize];
+        if GetTokenInformation(token_handle, TokenUser, buf.as_mut_ptr() as *mut _, req_len, &mut req_len) == 0 {
+            CloseHandle(token_handle);
+            return Err("Failed to get token user information".to_string());
+        }
+        CloseHandle(token_handle);
+
+        let token_user = buf.as_ptr() as *const TOKEN_USER;
+        let sid = (*token_user).User.Sid;
+
+        let mut sid_string_ptr = std::ptr::null_mut();
+        if ConvertSidToStringSidW(sid, &mut sid_string_ptr) == 0 {
+            return Err("Failed to convert SID to string".to_string());
+        }
+
+        // Read wide string into a Rust String
+        let mut len = 0;
+        while *sid_string_ptr.offset(len) != 0 {
+            len += 1;
+        }
+        let sid_u16 = std::slice::from_raw_parts(sid_string_ptr, len as usize);
+        let sid_string = String::from_utf16_lossy(sid_u16);
+        LocalFree(sid_string_ptr as isize);
+
+        // Build strict SDDL: Allow only SYSTEM (SY) and the specific user SID
+        let sddl_str = format!("D:(A;;GA;;;SY)(A;;GA;;;{})", sid_string);
+        let mut sddl_wide: Vec<u16> = sddl_str.encode_utf16().chain(std::iter::once(0)).collect();
+
+        let mut sec_desc_ptr = std::ptr::null_mut();
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl_wide.as_ptr(),
+            1, // SDDL_REVISION_1
+            &mut sec_desc_ptr,
+            std::ptr::null_mut()
+        ) == 0 {
+            return Err("Failed to convert SDDL to security descriptor".to_string());
+        }
+
+        let mut sec_attrs = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: sec_desc_ptr,
+            bInheritHandle: TRUE,
+        };
+
+        let pipe_name_wide: Vec<u16> = pipe_name.encode_utf16().chain(std::iter::once(0)).collect();
+        let pipe_handle = CreateNamedPipeW(
+            pipe_name_wide.as_ptr(),
+            PIPE_ACCESS_DUPLEX,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+            1, // Max instances
+            1024 * 64, // Out buffer size
+            1024 * 64, // In buffer size
+            0, // Default timeout
+            &sec_attrs
+        );
+
+        LocalFree(sec_desc_ptr as isize);
+
+        if pipe_handle == INVALID_HANDLE_VALUE {
+            return Err("Failed to create named pipe".to_string());
+        }
+
+        Ok(std::fs::File::from_raw_handle(pipe_handle as *mut std::ffi::c_void))
+    }
+}
+

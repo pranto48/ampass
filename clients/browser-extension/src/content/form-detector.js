@@ -190,6 +190,32 @@
   }
 
   /**
+   * Heuristic check to verify host page elements do not have clickjacking styles.
+   */
+  function isClickjackingDetected() {
+    try {
+      const htmlStyle = window.getComputedStyle(document.documentElement);
+      const bodyStyle = window.getComputedStyle(document.body);
+      
+      const checkStyle = (style) => {
+        const opacity = parseFloat(style.opacity);
+        if (!isNaN(opacity) && opacity < 0.1) return true;
+        if (style.visibility === 'hidden') return true;
+        if (style.display === 'none') return true;
+        if (style.pointerEvents === 'none') return true;
+        return false;
+      };
+
+      if (checkStyle(htmlStyle) || checkStyle(bodyStyle)) {
+        return true;
+      }
+    } catch (e) {
+      // Safe fallback
+    }
+    return false;
+  }
+
+  /**
    * Detect login and identity forms and notify service worker
    */
   function detectForms() {
@@ -307,6 +333,10 @@
    */
   function addFieldIndicator(field, providedFormData = null) {
     if (field.hasAttribute('data-ampass-icon-added')) return;
+    if (isClickjackingDetected()) {
+      console.warn('AMPass: Clickjacking attempt detected (HTML/Body style masking). Aborting field icon rendering.');
+      return;
+    }
     field.setAttribute('data-ampass-icon-added', 'true');
 
     // Find the associated form data for this specific field
@@ -482,6 +512,10 @@
 
   function showAmpassAuthForm(icon, status, formData) {
     removeAmpassDropdown();
+    if (isClickjackingDetected()) {
+      console.warn('AMPass: Clickjacking attempt detected (HTML/Body style masking). Aborting auth form rendering.');
+      return;
+    }
 
     const bubble = document.createElement('div');
     bubble.id = 'ampass-credential-dropdown';
@@ -806,6 +840,10 @@
    */
   function showUnifiedDropdown(icon, loginMatches, identities, formData) {
     removeAmpassDropdown();
+    if (isClickjackingDetected()) {
+      console.warn('AMPass: Clickjacking attempt detected (HTML/Body style masking). Aborting dropdown rendering.');
+      return;
+    }
 
     const dropdown = document.createElement('div');
     dropdown.id = 'ampass-credential-dropdown';
@@ -1170,6 +1208,10 @@
    * Gated by user setting (default: enabled).
    */
   function tryAutoFillOnLoad(formData) {
+    if (isClickjackingDetected()) {
+      console.warn('AMPass: Clickjacking attempt detected (HTML/Body style masking). Aborting load-time autofill.');
+      return;
+    }
     // Don't auto-fill if already filled
     if (formData.passwordField && formData.passwordField.getAttribute('data-ampass-filled') === 'true') return;
     // Don't auto-fill if the password field already has a value (browser autofill)
