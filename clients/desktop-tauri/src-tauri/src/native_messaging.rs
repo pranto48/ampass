@@ -537,7 +537,7 @@ pub fn run_native_messaging_loop(
                     let shared_secret = secret.diffie_hellman(&peer_public);
 
                     // Pin shared secret key in memory and zero it out on exit
-                    let mut locked_secret = LockedBuffer::new(shared_secret.as_bytes().to_vec());
+                    let locked_secret = LockedBuffer::new(shared_secret.as_bytes().to_vec());
 
                     // Create AES-GCM cipher
                     let cipher = Aes256Gcm::new(GenericArray::from_slice(locked_secret.as_slice()));
@@ -625,7 +625,7 @@ pub fn run_native_messaging_loop(
                 };
 
                 // Store raw decrypted padded bytes in locked memory
-                let mut locked_decrypted_padded = LockedBuffer::new(decrypted_padded);
+                let locked_decrypted_padded = LockedBuffer::new(decrypted_padded);
 
                 // Unpad decrypted bytes
                 let decrypted = match unpad(locked_decrypted_padded.as_slice()) {
@@ -638,7 +638,7 @@ pub fn run_native_messaging_loop(
                 };
 
                 // Store plaintext message in locked memory
-                let mut locked_decrypted = LockedBuffer::new(decrypted);
+                let locked_decrypted = LockedBuffer::new(decrypted);
 
                 // Parse inner message
                 let inner_msg: NativeMessage = match serde_json::from_slice(locked_decrypted.as_slice()) {
@@ -678,13 +678,13 @@ pub fn run_native_messaging_loop(
                 };
 
                 // Store inner response in locked memory
-                let mut locked_inner_response = LockedBuffer::new(inner_response_bytes);
+                let locked_inner_response = LockedBuffer::new(inner_response_bytes);
 
                 // Pad
                 let mut padded_response = locked_inner_response.as_slice().to_vec();
                 pad(&mut padded_response, 16);
 
-                let mut locked_padded_response = LockedBuffer::new(padded_response);
+                let locked_padded_response = LockedBuffer::new(padded_response);
 
                 // Generate new random IV
                 let mut resp_iv = [0u8; 12];
