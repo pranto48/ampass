@@ -1,4 +1,16 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+
+// Mock fetch globally for network isolation
+globalThis.fetch = vi.fn().mockImplementation(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([
+      { shared: ["apple.com", "icloud.com", "me.com", "mac.com"] },
+      { shared: ["google.com", "youtube.com", "gmail.com", "blogger.com"] }
+    ])
+  })
+);
+
 import { UrlMatcher, AppleQuirksManager, filterVaultEntries } from '../../../shared/url-matcher/UrlMatcher.ts';
 
 describe('UrlMatcher Tests', () => {

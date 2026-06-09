@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMPass - Extension Settings</title>
+  <script type="module" crossorigin src="/assets/options-DUZKbM-u.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-YP0FEG5d.js">
+  <link rel="modulepreload" crossorigin href="/assets/security-pk10pw2S.js">
+  <link rel="stylesheet" crossorigin href="/assets/options-D3m2EjZv.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="url(#og)"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/><defs><linearGradient id="og" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs></svg>
+      <h1>AMPass Extension Settings</h1>
+    </header>
+
+    <div id="statusMsg" class="status-msg" style="display:none;"></div>
+
+    <!-- Server Connection -->
+    <section class="card">
+      <h2>Server Connection</h2>
+      <div class="form-group">
+        <label for="serverUrl">AMPass Server URL</label>
+        <input type="url" id="serverUrl" class="input" placeholder="https://yourdomain.com/ampass">
+        <p class="hint">The URL of your AMPass installation. HTTPS required for production.</p>
+      </div>
+      <div class="form-group">
+        <label for="deviceName">Device Name</label>
+        <input type="text" id="deviceName" class="input" placeholder="Chrome on Windows" maxlength="100">
+        <p class="hint">A friendly name to identify this browser in your AMPass settings.</p>
+      </div>
+    </section>
+
+    <!-- Autofill Behavior -->
+    <section class="card">
+      <h2>Autofill</h2>
+      <div class="form-group">
+        <label for="autofillBehavior">Autofill Behavior</label>
+        <select id="autofillBehavior" class="input">
+          <option value="click">Fill after clicking AMPass icon</option>
+          <option value="ask">Ask before filling</option>
+          <option value="never">Never autofill (manual copy only)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="check-label">
+          <input type="checkbox" id="allowHttpAutofill">
+          <span>Allow autofill on HTTP pages (not recommended)</span>
+        </label>
+        <p class="hint">By default, autofill is disabled on non-HTTPS pages except localhost.</p>
+      </div>
+    </section>
+
+    <!-- Autosave Behavior -->
+    <section class="card">
+      <h2>Autosave</h2>
+      <div class="form-group">
+        <label for="autosaveBehavior">When a new login is detected</label>
+        <select id="autosaveBehavior" class="input">
+          <option value="ask">Ask to save</option>
+          <option value="never">Never save automatically</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Security -->
+    <section class="card">
+      <h2>Security</h2>
+      <div class="form-group">
+        <label for="clipboardClear">Clear clipboard after (seconds)</label>
+        <input type="number" id="clipboardClear" class="input" min="5" max="300" value="30">
+      </div>
+      <div class="form-group">
+        <label for="lockTimeout">Auto-lock vault after (minutes)</label>
+        <input type="number" id="lockTimeout" class="input" min="1" max="1440" value="15">
+      </div>
+    </section>
+
+    <!-- Desktop App Bridge -->
+    <section class="card">
+      <h2>Desktop App Bridge</h2>
+      <div class="form-group">
+        <label class="check-label">
+          <input type="checkbox" id="useDesktopBridge">
+          <span>Use AMPass desktop app for vault operations (optional)</span>
+        </label>
+        <p class="hint">When enabled, the extension communicates with the installed AMPass desktop app via native messaging. The desktop app must be running and unlocked. If unavailable, falls back to server API.</p>
+      </div>
+      <div class="form-group">
+        <p class="hint" id="bridgeStatus">Status: Not tested</p>
+      </div>
+    </section>
+
+    <!-- Theme -->
+    <section class="card">
+      <h2>Appearance</h2>
+      <div class="form-group">
+        <label for="theme">Theme</label>
+        <select id="theme" class="input">
+          <option value="system">System default</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button id="btnSave" class="btn btn-primary">Save Settings</button>
+      <button id="btnLogout" class="btn btn-danger">Disconnect & Logout</button>
+    </div>
+
+    <footer class="footer">
+      <p>AMPass Password Manager v1.0.0</p>
+      <p class="hint">All vault data is encrypted locally. The server never sees your passwords.</p>
+    </footer>
+  </div>
+
+</body>
+</html>

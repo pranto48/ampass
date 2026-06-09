@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=400">
+  <title>AMPass</title>
+  <script type="module" crossorigin src="/assets/popup-DeDa16hb.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-YP0FEG5d.js">
+  <link rel="modulepreload" crossorigin href="/assets/security-pk10pw2S.js">
+  <link rel="modulepreload" crossorigin href="/assets/native-client-6yOEZykD.js">
+  <link rel="stylesheet" crossorigin href="/assets/popup-D9h35fyo.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="url(#g)"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs></svg>
+        <span class="brand-name">AMPass</span>
+      </div>
+      <div class="header-actions">
+        <div id="bridgeIndicator" class="bridge-indicator" style="display:none;" title="Connected to AMPass Desktop">🖥️</div>
+        <button id="btnBack" class="icon-btn" title="Back" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+        <button id="btnSettings" class="icon-btn" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15 1.65 1.65 0 003.17 14H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68 1.65 1.65 0 0010 3.17V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+        <button id="btnLock" class="icon-btn" title="Lock vault" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Status Bar -->
+    <div id="statusBar" class="status-bar" style="display:none;"></div>
+
+    <!-- Views -->
+
+    <!-- Loading -->
+    <div id="viewLoading" class="view view-center" style="display:none;">
+      <div class="spinner"></div>
+      <p class="text-muted" style="margin-top:10px;">Loading...</p>
+    </div>
+
+    <!-- Setup -->
+    <div id="viewSetup" class="view" style="display:none;">
+      <div class="view-center">
+        <p class="text-muted">Connect to your AMPass server</p>
+        <input type="url" id="setupUrl" class="input" placeholder="https://yourdomain.com/ampass">
+        <button id="btnSetupSave" class="btn btn-primary btn-full">Connect</button>
+      </div>
+    </div>
+
+    <!-- Login -->
+    <div id="viewLogin" class="view" style="display:none;">
+      <div class="view-center">
+        <p class="text-muted">Sign in to your vault</p>
+        <input type="text" id="loginUsername" class="input" placeholder="Username or email" autocomplete="username">
+        <input type="password" id="loginPassword" class="input" placeholder="Password" autocomplete="current-password">
+        <label class="check-label" style="margin:8px 0;font-size:11px;"><input type="checkbox" id="loginTrust"> Trust this browser (stay logged in)</label>
+        <div id="login2faContainer" style="display:none; width:100%; margin-bottom:8px;">
+          <input type="text" id="login2faCode" class="input" placeholder="2FA Code (Google Authenticator)" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+        </div>
+        <button id="btnLogin" class="btn btn-primary btn-full">Sign In</button>
+        <div id="loginError" class="error-msg" style="display:none;"></div>
+        <button id="btnResetConn" class="btn btn-ghost btn-full" style="margin-top:8px;font-size:11px;">Reset Connection</button>
+      </div>
+    </div>
+
+    <!-- Unlock -->
+    <div id="viewUnlock" class="view" style="display:none;">
+      <div class="view-center">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5" style="margin:0 auto 12px;display:block;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <p id="unlockTrustInfo" class="text-muted" style="font-size:11px;margin-bottom:4px;display:none;"></p>
+        <p class="text-muted">Enter master password to unlock</p>
+        <input type="password" id="unlockPassword" class="input" placeholder="Master password" autocomplete="off">
+        <button id="btnUnlock" class="btn btn-primary btn-full">Unlock</button>
+        <div id="unlockError" class="error-msg" style="display:none;"></div>
+        <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;">
+          <button id="btnUnlockSignOut" class="btn btn-ghost" style="font-size:10px;padding:4px 8px;">Sign Out</button>
+          <button id="btnUnlockChangeServer" class="btn btn-ghost" style="font-size:10px;padding:4px 8px;">Change Server</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vault List -->
+    <div id="viewVault" class="view" style="display:none;">
+      <!-- Search -->
+      <div class="search-bar">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" class="input search-input" placeholder="Search vault...">
+      </div>
+
+      <!-- Matches for current site -->
+      <div id="matchesSection" style="display:none;">
+        <div class="section-header">
+          <span class="section-title">Matches for this site</span>
+        </div>
+        <div id="matchesList" class="item-list"></div>
+      </div>
+
+      <!-- All items -->
+      <div id="allItemsSection" style="display:none;">
+        <div class="section-header">
+          <span class="section-title">All Items</span>
+          <span id="itemCount" class="badge">0</span>
+        </div>
+        <div id="allItemsList" class="item-list"></div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 8px;display:block;opacity:0.3;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <p>No items in your vault yet.</p>
+        <p style="font-size:11px;margin-top:4px;">Click + Add Login to create your first entry.</p>
+      </div>
+
+      <!-- Actions -->
+      <div class="bottom-actions">
+        <button id="btnAddNew" class="btn btn-secondary btn-sm">+ Add Login</button>
+        <button id="btnAddNote" class="btn btn-secondary btn-sm">+ Note</button>
+        <button id="btnAddIdentity" class="btn btn-secondary btn-sm">+ Identity</button>
+        <button id="btnGenerate" class="btn btn-secondary btn-sm">Generate</button>
+      </div>
+    </div>
+
+    <!-- Item Detail View -->
+    <div id="viewDetail" class="view" style="display:none;">
+      <div class="detail-header">
+        <div class="detail-icon" id="detailIcon">🔑</div>
+        <div class="detail-title-group">
+          <span id="detailTitle" class="detail-title"></span>
+          <span id="detailUrl" class="detail-url text-muted"></span>
+        </div>
+        <button id="btnDetailFav" class="icon-btn fav-btn" title="Favorite">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </button>
+      </div>
+
+      <div class="detail-fields">
+        <!-- Username -->
+        <div class="detail-field" id="detailUsernameRow">
+          <span class="detail-field-label">Username</span>
+          <div class="detail-field-value-row">
+            <span id="detailUsername" class="detail-field-value"></span>
+            <button class="icon-btn detail-copy-btn" id="btnCopyUsername" title="Copy username">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="detail-field" id="detailPasswordRow">
+          <span class="detail-field-label">Password</span>
+          <div class="detail-field-value-row">
+            <span id="detailPassword" class="detail-field-value mono password-dots">••••••••</span>
+            <button class="icon-btn detail-copy-btn" id="btnTogglePass" title="Show/Hide password">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button class="icon-btn detail-copy-btn" id="btnCopyPassword" title="Copy password">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+          <div class="detail-strength-bar"><div id="detailStrengthFill" class="strength-fill"></div></div>
+        </div>
+
+        <!-- TOTP -->
+        <div class="detail-field" id="detailTotpRow" style="display:none;">
+          <span class="detail-field-label">2FA Code</span>
+          <div class="detail-field-value-row">
+            <span id="detailTotpCode" class="detail-field-value mono totp-code">------</span>
+            <div id="totpCountdown" class="totp-countdown">30</div>
+            <button class="icon-btn detail-copy-btn" id="btnCopyTotp" title="Copy 2FA code">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Identity Fields Group -->
+        <div id="detailIdentityGroup" style="display:none;margin-bottom:10px;">
+          <div class="detail-field-row">
+            <div class="detail-field" style="flex:1;margin-bottom:0;" id="detailFirstNameRow">
+              <span class="detail-field-label">First Name</span>
+              <div class="detail-field-value-row">
+                <span id="detailFirstName" class="detail-field-value"></span>
+                <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailFirstName" title="Copy first name">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="detail-field" style="flex:1;margin-bottom:0;" id="detailLastNameRow">
+              <span class="detail-field-label">Last Name</span>
+              <div class="detail-field-value-row">
+                <span id="detailLastName" class="detail-field-value"></span>
+                <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailLastName" title="Copy last name">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-field" id="detailIdentityEmailRow" style="margin-bottom:10px;">
+            <span class="detail-field-label">Email</span>
+            <div class="detail-field-value-row">
+              <span id="detailIdentityEmail" class="detail-field-value"></span>
+              <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailIdentityEmail" title="Copy email">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="detail-field" id="detailIdentityPhoneRow" style="margin-bottom:10px;">
+            <span class="detail-field-label">Phone</span>
+            <div class="detail-field-value-row">
+              <span id="detailIdentityPhone" class="detail-field-value"></span>
+              <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailIdentityPhone" title="Copy phone">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="detail-field" id="detailIdentityCompanyRow" style="margin-bottom:10px;">
+            <span class="detail-field-label">Company</span>
+            <div class="detail-field-value-row">
+              <span id="detailIdentityCompany" class="detail-field-value"></span>
+              <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailIdentityCompany" title="Copy company">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="detail-field" id="detailAddressRow" style="margin-bottom:10px;">
+            <span class="detail-field-label">Address</span>
+            <div class="detail-field-value-row">
+              <span id="detailAddress" class="detail-field-value" style="white-space:pre-line;"></span>
+              <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailAddress" title="Copy address">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="detail-field" id="detailDobRow" style="margin-bottom:10px;">
+            <span class="detail-field-label">Date of Birth</span>
+            <div class="detail-field-value-row">
+              <span id="detailDob" class="detail-field-value"></span>
+              <button class="icon-btn detail-copy-btn btn-copy-child" data-target="detailDob" title="Copy date of birth">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="detail-field" id="detailNotesRow" style="display:none;">
+          <span class="detail-field-label">Notes</span>
+          <p id="detailNotes" class="detail-notes"></p>
+        </div>
+      </div>
+
+      <div class="detail-actions">
+        <button id="btnDetailAutofill" class="btn btn-primary btn-sm">⚡ Autofill</button>
+        <button id="btnDetailEdit" class="btn btn-secondary btn-sm">Edit</button>
+        <button id="btnDetailDelete" class="btn btn-danger btn-sm">Delete</button>
+      </div>
+    </div>
+
+    <!-- Add / Edit Form -->
+    <div id="viewEdit" class="view" style="display:none;">
+      <div class="edit-form-title" id="editFormTitle">Add Login</div>
+      <input type="hidden" id="editItemId">
+      <input type="hidden" id="editItemType" value="login">
+
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input type="text" id="editTitle" class="input" placeholder="e.g. GitHub, Netflix">
+      </div>
+      <div class="form-group" id="editUrlGroup">
+        <label class="form-label">Website URL</label>
+        <input type="url" id="editUrl" class="input" placeholder="https://example.com">
+      </div>
+      <div class="form-group" id="editUsernameGroup">
+        <label class="form-label">Username / Email</label>
+        <input type="text" id="editUsername" class="input" placeholder="you@example.com" autocomplete="off">
+      </div>
+      <div class="form-group" id="editPasswordGroup">
+        <label class="form-label">Password</label>
+        <div class="pw-input-row">
+          <input type="password" id="editPassword" class="input" placeholder="Password" autocomplete="new-password">
+          <button id="btnToggleEditPass" class="icon-btn" title="Show/hide">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button id="btnFillGenerate" class="icon-btn" title="Generate password">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </button>
+        </div>
+        <div class="strength-bar" style="margin-top:5px;"><div id="editStrengthFill" class="strength-fill"></div></div>
+      </div>
+      <div class="form-group" id="editTotpGroup">
+        <label class="form-label">2FA Secret (optional)</label>
+        <input type="text" id="editTotp" class="input mono" placeholder="JBSWY3DPEHPK3PXP" autocomplete="off" spellcheck="false">
+        <span class="form-hint">Base32 key from the site's 2FA setup</span>
+      </div>
+      <!-- Identity Fields Container -->
+      <div id="editIdentityFields" style="display:none;margin-bottom:9px;">
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">First Name</label>
+            <input type="text" id="editFirstName" class="input" placeholder="John" autocomplete="off">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Last Name</label>
+            <input type="text" id="editLastName" class="input" placeholder="Doe" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="editIdentityEmail" class="input" placeholder="john.doe@example.com" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="tel" id="editIdentityPhone" class="input" placeholder="+1 (555) 019-2834" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Company</label>
+          <input type="text" id="editIdentityCompany" class="input" placeholder="Acme Corp" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address Line 1</label>
+          <input type="text" id="editAddress1" class="input" placeholder="123 Main St" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address Line 2</label>
+          <input type="text" id="editAddress2" class="input" placeholder="Apt 4B" autocomplete="off">
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">City</label>
+            <input type="text" id="editCity" class="input" placeholder="New York" autocomplete="off">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">State / Region</label>
+            <input type="text" id="editState" class="input" placeholder="NY" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Post Code</label>
+            <input type="text" id="editPostcode" class="input" placeholder="10001" autocomplete="off">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Country</label>
+            <input type="text" id="editCountry" class="input" placeholder="United States" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date of Birth</label>
+          <input type="date" id="editDob" class="input" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="form-group" id="editNotesGroup">
+        <label class="form-label">Notes (optional)</label>
+        <textarea id="editNotes" class="input edit-notes" rows="2" placeholder="Any extra info..."></textarea>
+      </div>
+
+      <div class="edit-actions">
+        <button id="btnSaveItem" class="btn btn-primary btn-sm" style="flex:1;">Save</button>
+        <button id="btnCancelEdit" class="btn btn-secondary btn-sm">Cancel</button>
+      </div>
+      <div id="editError" class="error-msg" style="display:none;margin-top:8px;"></div>
+    </div>
+
+    <!-- Generator Panel -->
+    <div id="viewGenerator" class="view" style="display:none;">
+      <div class="section-header">
+        <span class="section-title">Password Generator</span>
+      </div>
+      <div class="gen-output">
+        <input type="text" id="genPassword" class="input mono" readonly>
+        <button id="btnCopyGen" class="icon-btn" title="Copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+      </div>
+      <div id="genStrength" class="strength-bar"><div class="strength-fill"></div></div>
+      <div class="gen-options">
+        <label class="slider-label">Length: <span id="genLengthVal">20</span></label>
+        <input type="range" id="genLength" min="8" max="64" value="20" class="range">
+        <label class="check-label"><input type="checkbox" id="genUpper" checked> Uppercase</label>
+        <label class="check-label"><input type="checkbox" id="genLower" checked> Lowercase</label>
+        <label class="check-label"><input type="checkbox" id="genNumbers" checked> Numbers</label>
+        <label class="check-label"><input type="checkbox" id="genSymbols" checked> Symbols</label>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button id="btnRegenerate" class="btn btn-primary" style="flex:1;">Regenerate</button>
+        <button id="btnUsePwInEdit" class="btn btn-secondary btn-sm" style="display:none;" title="Use this password">Use</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="versionFooter"></div>
+
+</body>
+</html>

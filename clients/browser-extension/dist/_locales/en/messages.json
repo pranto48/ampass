@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "AMPass Password Manager",
+    "description": "Name of the extension"
+  },
+  "appDescription": {
+    "message": "Secure password manager with zero-knowledge encryption. Autofill, autosave, and generate strong passwords.",
+    "description": "Description of the extension"
+  },
+  "openPopup": {
+    "message": "Open AMPass popup",
+    "description": "Command description for opening the popup"
+  }
+}

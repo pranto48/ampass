@@ -1,0 +1,74 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_appName__",
+  "default_locale": "en",
+  "version": "1.107.0",
+  "version_name": "V1.107",
+  "description": "__MSG_appDescription__",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting",
+    "clipboardWrite",
+    "alarms",
+    "nativeMessaging",
+    "contextMenus"
+  ],
+  "optional_permissions": [],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
+  "options_page": "src/options/options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/autofill.js",
+        "src/content/form-detector.js",
+        "src/content/save-detector.js"
+      ],
+      "css": [],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L"
+      },
+      "description": "Open AMPass popup"
+    },
+    "autofill_current": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F"
+      },
+      "description": "Autofill login on current page"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none';"
+  },
+  "minimum_chrome_version": "110"
+}
