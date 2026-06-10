@@ -788,17 +788,15 @@ pub fn create_hardened_named_pipe(pipe_name: &str) -> Result<std::fs::File, Stri
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
     use windows_sys::Win32::Security::{
         GetTokenInformation, TokenUser, TOKEN_USER, TOKEN_QUERY,
-        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
         SECURITY_ATTRIBUTES
+    };
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW
     };
     use windows_sys::Win32::System::Pipes::{
         CreateNamedPipeW, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE, PIPE_READMODE_BYTE, PIPE_WAIT
     };
-
-    // Import LocalFree from Windows SystemServices/Foundation
-    extern "system" {
-        fn LocalFree(hmem: isize) -> isize;
-    }
+    use windows_sys::Win32::Foundation::LocalFree;
 
     unsafe {
         let mut token_handle = 0isize;

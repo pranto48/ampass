@@ -73,28 +73,29 @@ const DomainUtils = {
       const parsedItem = new URL(normItem);
       const parsedCurrent = new URL(normCurrent);
 
-      // 1. Hostname Match (Strict Subdomain matching)
-      if (parsedItem.hostname.toLowerCase() !== parsedCurrent.hostname.toLowerCase()) {
-        return false;
+      const baseItem = this.getBaseDomain(normItem);
+      const baseCurrent = this.getBaseDomain(normCurrent);
+
+      // 1. Base Domain Match
+      if (baseItem && baseCurrent && baseItem === baseCurrent) {
+        return true;
       }
 
-      // 2. Port Match (Strict Port matching)
-      const itemPort = parsedItem.port || (parsedItem.protocol === 'https:' ? '443' : '80');
-      const currentPort = parsedCurrent.port || (parsedCurrent.protocol === 'https:' ? '443' : '80');
-      if (itemPort !== currentPort) {
-        return false;
-      }
-
-      // 3. Path Match (Strict subdirectory/subdirectory matching)
-      const itemPath = parsedItem.pathname.replace(/\/+$/, '');
-      const currentPath = parsedCurrent.pathname.replace(/\/+$/, '');
-      if (itemPath && itemPath !== '/') {
-        if (!currentPath.startsWith(itemPath)) {
-          return false;
+      // 2. Shared backend equivalents
+      const equivalents = [
+        ["apple.com", "icloud.com", "me.com", "mac.com"],
+        ["google.com", "youtube.com", "gmail.com", "blogger.com"],
+        ["facebook.com", "messenger.com", "instagram.com"],
+        ["microsoft.com", "live.com", "outlook.com", "office.com", "hotmail.com", "skype.com"],
+        ["yahoo.com", "flickr.com"]
+      ];
+      for (const group of equivalents) {
+        if (group.includes(baseItem) && group.includes(baseCurrent)) {
+          return true;
         }
       }
 
-      return true;
+      return false;
     } catch {
       return this.domainsMatch(itemUrl, currentUrl);
     }
