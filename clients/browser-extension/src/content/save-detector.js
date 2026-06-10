@@ -113,45 +113,56 @@
       payload: { data }
     }).catch(() => {});
 
+    // Prevent form submission while we check vault status and evaluate candidates
+    e.preventDefault();
+    e.stopPropagation();
+
+    function continueSubmit() {
+      form.setAttribute('data-ampass-submitting', 'true');
+      if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+    }
+
     // Check if vault is unlocked before intercepting the form
-    // If vault is locked, just let the form submit normally (credentials are queued for later)
     chrome.runtime.sendMessage({ type: 'GET_STATUS' }).then(status => {
       if (status && status.success && status.unlocked) {
         // Don't intercept the AMPass server's own login/register/unlock pages
         const serverUrl = status.serverUrl || '';
         if (serverUrl && window.location.href.startsWith(serverUrl)) {
-          form.setAttribute('data-ampass-submitting', 'true');
-          if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+          continueSubmit();
           return;
         }
-        // Vault is unlocked — show save prompt
-        showSavePromptWithContinue(form, data);
+        
+        // Evaluate if prompt is needed
+        evaluateCredentialAction(data).then(result => {
+          if (result.action === 'none') {
+            // Credentials are identical, clear candidate and submit
+            chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
+            continueSubmit();
+          } else {
+            // Vault is unlocked and credentials changed/new — show save prompt
+            showSavePromptWithContinue(form, data, result.action, result.existingItem);
+          }
+        });
       } else {
         // Vault is locked — can't save now, just submit the form
-        form.setAttribute('data-ampass-submitting', 'true');
-        if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+        continueSubmit();
       }
     }).catch(() => {
       // On error, just submit the form normally
-      form.setAttribute('data-ampass-submitting', 'true');
-      if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+      continueSubmit();
     });
-
-    // Prevent form submission while we check vault status
-    e.preventDefault();
-    e.stopPropagation();
   }
 
   /**
    * Capture and queue credentials before the page can navigate away.
    */
   function captureAndQueue(form) {
-    if (!(form instanceof HTMLFormElement)) return;
+    if (!(form instanceof HTMLFormElement)) return null;
 
     const data = captureSubmission(form);
     if (!data) return null;
 
-    // Don't capture if it was autofilled by us (avoid re-saving what we just filled)
+    // Don't capture if it was autofilled by us
     const pwField = form.querySelector('input[type="password"][data-ampass-filled]');
     if (pwField) return null;
 
@@ -170,25 +181,75 @@
   }
 
   /**
+   * Evaluates if we should show a save or update prompt for the credential.
+   * Returns a promise resolving to:
+   * - { action: 'save' } if it's new
+   * - { action: 'update', existingItem } if password changed
+   * - { action: 'none' } if identical
+   */
+  function evaluateCredentialAction(data) {
+    return new Promise(resolve => {
+      if (!data || !data.password) {
+        resolve({ action: 'none' });
+        return;
+      }
+
+      chrome.runtime.sendMessage({
+        type: 'GET_MATCHES',
+        payload: { url: data.url }
+      }).then(response => {
+        if (!response || !response.success || !response.items || response.items.length === 0) {
+          resolve({ action: 'save' });
+          return;
+        }
+
+        const matches = response.items;
+        const submittedUser = (data.username || '').trim().toLowerCase();
+        const sameUserMatch = matches.find(item => 
+          (item.username || '').trim().toLowerCase() === submittedUser
+        );
+
+        if (sameUserMatch) {
+          chrome.runtime.sendMessage({
+            type: 'DECRYPT_ITEM',
+            payload: { id: sameUserMatch.id }
+          }).then(decryptedResponse => {
+            if (decryptedResponse && decryptedResponse.success && decryptedResponse.item) {
+              const savedPassword = decryptedResponse.item.password || '';
+              if (savedPassword === data.password) {
+                resolve({ action: 'none' });
+              } else {
+                resolve({ action: 'update', existingItem: sameUserMatch });
+              }
+            } else {
+              resolve({ action: 'update', existingItem: sameUserMatch });
+            }
+          }).catch(() => {
+            resolve({ action: 'update', existingItem: sameUserMatch });
+          });
+        } else {
+          resolve({ action: 'save' });
+        }
+      }).catch(() => {
+        resolve({ action: 'none' });
+      });
+    });
+  }
+
+  /**
    * Check whether the captured credential is new or an update.
    */
   function processSaveCandidate(data) {
-    if (!data || !data.password) return;
-
-    chrome.runtime.sendMessage({
-      type: 'GET_MATCHES',
-      payload: { url: data.url }
-    }).then(response => {
-      if (!response || !response.success) return;
-
-      if (response.count > 0) {
-        // Existing credential - ask to update
-        showSavePrompt('update', data, response.items[0]);
-      } else {
-        // New credential - ask to save
+    evaluateCredentialAction(data).then(result => {
+      if (result.action === 'save') {
         showSavePrompt('save', data);
+      } else if (result.action === 'update') {
+        showSavePrompt('update', data, result.existingItem);
+      } else {
+        // Clear pending save candidate since it matches exactly
+        chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
       }
-    }).catch(() => {});
+    });
   }
 
   /**
@@ -242,11 +303,12 @@
     }).catch(() => {});
   }
 
+
   /**
    * Show save prompt that pauses form submission.
    * After user decides, re-submits the form.
    */
-  function showSavePromptWithContinue(form, data) {
+  function showSavePromptWithContinue(form, data, action = 'save', existingItem = null) {
     const existing = document.getElementById('ampass-save-prompt');
     if (existing) existing.remove();
 
@@ -268,29 +330,36 @@
       document.head.appendChild(style);
     }
 
+    const titleText = action === 'update' ? 'Update password?' : 'Save login?';
+    const actionLabel = action === 'update' ? 'Update & Continue' : 'Save & Continue';
+
     // Build DOM safely — no innerHTML with user data
     prompt.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
         <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="#6366f1"/><path d="M16 8L10 12v4c0 4.4 2.6 8.5 6 10 3.4-1.5 6-5.6 6-10v-4l-6-4z" fill="white" opacity="0.9"/></svg>
-        <span style="font-weight:600;font-size:15px;">Save login?</span>
+        <span id="ampass-save-title" style="font-weight:600;font-size:15px;"></span>
       </div>
       <p id="ampass-save-desc" style="color:#a1a1aa;margin-bottom:14px;"></p>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button id="ampass-save-skip" style="padding:7px 14px;border-radius:6px;border:1px solid #27272a;background:#1f1f23;color:#a1a1aa;cursor:pointer;font-size:13px;">Not now</button>
-        <button id="ampass-save-yes" style="padding:7px 14px;border-radius:6px;border:none;background:#6366f1;color:white;cursor:pointer;font-size:13px;font-weight:500;">Save &amp; Continue</button>
+        <button id="ampass-save-yes" style="padding:7px 14px;border-radius:6px;border:none;background:#6366f1;color:white;cursor:pointer;font-size:13px;font-weight:500;"></button>
       </div>
     `;
-    // Populate description safely using textContent
+    // Populate safely using textContent
+    prompt.querySelector('#ampass-save-title').textContent = titleText;
+    prompt.querySelector('#ampass-save-yes').textContent = actionLabel;
+
     const descEl = prompt.querySelector('#ampass-save-desc');
     const strong = document.createElement('strong');
     strong.textContent = data.username || '(unknown)';
-    descEl.append('Save login for ', strong, ' on ', data.domain || window.location.hostname, '?');
+    const verb = action === 'update' ? 'Update the password for ' : 'Save login for ';
+    descEl.append(verb, strong, ' on ', data.domain || window.location.hostname, '?');
 
     document.body.appendChild(prompt);
 
     function continueSubmit() {
       prompt.remove();
-      // Re-submit the form programmatically (bypasses our listener since we use requestSubmit)
+      // Re-submit the form programmatically
       try {
         form.setAttribute('data-ampass-submitting', 'true');
         if (form.requestSubmit) {
@@ -309,22 +378,42 @@
     });
 
     prompt.querySelector('#ampass-save-yes').addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'SAVE_ITEM',
-        payload: {
-          itemData: {
-            title: data.title,
-            url: data.url,
-            username: data.username,
-            password: data.password
+      if (action === 'update' && existingItem) {
+        chrome.runtime.sendMessage({
+          type: 'UPDATE_ITEM',
+          payload: {
+            id: existingItem.id,
+            itemData: {
+              title: data.title,
+              url: data.url,
+              username: data.username,
+              password: data.password
+            }
           }
-        }
-      }).then(() => {
-        chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
-        continueSubmit();
-      }).catch(() => {
-        continueSubmit();
-      });
+        }).then(() => {
+          chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
+          continueSubmit();
+        }).catch(() => {
+          continueSubmit();
+        });
+      } else {
+        chrome.runtime.sendMessage({
+          type: 'SAVE_ITEM',
+          payload: {
+            itemData: {
+              title: data.title,
+              url: data.url,
+              username: data.username,
+              password: data.password
+            }
+          }
+        }).then(() => {
+          chrome.runtime.sendMessage({ type: 'CLEAR_PENDING_SAVE' }).catch(() => {});
+          continueSubmit();
+        }).catch(() => {
+          continueSubmit();
+        });
+      }
     });
 
     // Auto-continue after 30 seconds if user doesn't interact
