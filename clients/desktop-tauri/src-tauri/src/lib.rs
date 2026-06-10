@@ -797,6 +797,11 @@ pub fn run() {
             // Set up idle lock checker
             lock::setup_lock_checker(app.handle().clone());
 
+            // Register native messaging host connection for browser extensions
+            if let Err(e) = native_messaging::register_native_messaging_host() {
+                eprintln!("Failed to register native messaging host: {}", e);
+            }
+
             // Set up active application tracker background thread
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {

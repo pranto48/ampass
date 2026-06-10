@@ -874,3 +874,90 @@ pub fn create_hardened_named_pipe(pipe_name: &str) -> Result<std::fs::File, Stri
     }
 }
 
+/// Dynamically registers the native messaging host manifests and updates registry paths.
+/// Writes to %LOCALAPPDATA%\AMPass to avoid requiring administrator privileges.
+#[cfg(target_os = "windows")]
+pub fn register_native_messaging_host() -> Result<(), String> {
+    use std::fs;
+    use std::process::Command;
+
+    // Get %LOCALAPPDATA% directory
+    let local_app_data = dirs::data_local_dir()
+        .ok_or_else(|| "Failed to get Local AppData directory".to_string())?;
+    let ampass_dir = local_app_data.join("AMPass");
+    fs::create_dir_all(&ampass_dir)
+        .map_err(|e| format!("Failed to create AMPass directory: {}", e))?;
+
+    // Get current executable path
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
+    let exe_path_str = exe_path.to_string_lossy().to_string();
+
+    // Chrome/Edge Manifest path and content
+    let chrome_manifest_path = ampass_dir.join("com.ampass.desktop.json");
+    let chrome_manifest_content = serde_json::json!({
+        "name": "com.ampass.desktop",
+        "description": "AMPass Desktop App - Native Messaging Host",
+        "path": exe_path_str,
+        "type": "stdio",
+        "allowed_origins": [
+            "chrome-extension://abjmemohpnoinbhngjppnpbacjdmajmd/",
+            "chrome-extension://pmjlncjjocmhhocadbjafkllcnpcdnjg/",
+            "chrome-extension://kbkdfkleifdhojbpnhdidpgbjfpgdlla/"
+        ]
+    });
+    fs::write(&chrome_manifest_path, serde_json::to_string_pretty(&chrome_manifest_content).unwrap())
+        .map_err(|e| format!("Failed to write Chrome/Edge native messaging manifest: {}", e))?;
+
+    // Firefox Manifest path and content
+    let firefox_manifest_path = ampass_dir.join("com.ampass.desktop-firefox.json");
+    let firefox_manifest_content = serde_json::json!({
+        "name": "com.ampass.desktop",
+        "description": "AMPass Desktop App - Native Messaging Host",
+        "path": exe_path_str,
+        "type": "stdio",
+        "allowed_extensions": [
+            "ampass@ampass.local"
+        ]
+    });
+    fs::write(&firefox_manifest_path, serde_json::to_string_pretty(&firefox_manifest_content).unwrap())
+        .map_err(|e| format!("Failed to write Firefox native messaging manifest: {}", e))?;
+
+    // Register registry keys using reg.exe (HKCU does not need admin privileges)
+    let targets = [
+        (
+            r"HKCU\Software\Google\Chrome\NativeMessagingHosts\com.ampass.desktop",
+            &chrome_manifest_path,
+        ),
+        (
+            r"HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.ampass.desktop",
+            &chrome_manifest_path,
+        ),
+        (
+            r"HKCU\Software\Mozilla\NativeMessagingHosts\com.ampass.desktop",
+            &firefox_manifest_path,
+        ),
+    ];
+
+    for (key, path) in &targets {
+        let path_str = path.to_string_lossy().to_string();
+        let status = Command::new("reg")
+            .args(["add", key, "/ve", "/t", "REG_SZ", "/d", &path_str, "/f"])
+            .status()
+            .map_err(|e| format!("Failed to execute reg.exe: {}", e))?;
+
+        if !status.success() {
+            return Err(format!("reg.exe exited with non-zero code for key: {}", key));
+        }
+    }
+
+    Ok(())
+}
+
+/// Fallback for non-Windows platforms
+#[cfg(not(target_os = "windows"))]
+pub fn register_native_messaging_host() -> Result<(), String> {
+    Ok(())
+}
+
+
