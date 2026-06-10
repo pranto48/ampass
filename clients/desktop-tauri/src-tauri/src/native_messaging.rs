@@ -793,8 +793,9 @@ pub fn create_hardened_named_pipe(pipe_name: &str) -> Result<std::fs::File, Stri
     use windows_sys::Win32::Security::Authorization::{
         ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW
     };
+    use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
     use windows_sys::Win32::System::Pipes::{
-        CreateNamedPipeW, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE, PIPE_READMODE_BYTE, PIPE_WAIT
+        CreateNamedPipeW, PIPE_TYPE_BYTE, PIPE_READMODE_BYTE, PIPE_WAIT
     };
     use windows_sys::Win32::Foundation::LocalFree;
 
@@ -829,7 +830,7 @@ pub fn create_hardened_named_pipe(pipe_name: &str) -> Result<std::fs::File, Stri
         }
         let sid_u16 = std::slice::from_raw_parts(sid_string_ptr, len as usize);
         let sid_string = String::from_utf16_lossy(sid_u16);
-        LocalFree(sid_string_ptr as isize);
+        LocalFree(sid_string_ptr as *mut _);
 
         // Build strict SDDL: Allow only SYSTEM (SY) and the specific user SID
         let sddl_str = format!("D:(A;;GA;;;SY)(A;;GA;;;{})", sid_string);
@@ -863,7 +864,7 @@ pub fn create_hardened_named_pipe(pipe_name: &str) -> Result<std::fs::File, Stri
             &sec_attrs
         );
 
-        LocalFree(sec_desc_ptr as isize);
+        LocalFree(sec_desc_ptr as *mut _);
 
         if pipe_handle == INVALID_HANDLE_VALUE {
             return Err("Failed to create named pipe".to_string());
