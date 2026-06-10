@@ -491,20 +491,61 @@ async function getMatches(url) {
 
   const vaultKeyHex = await Storage.getVaultKey();
   const matches = [];
+
+  let currentHost = '';
+  let currentPort = '';
+  let currentPath = '/';
+  try {
+    const parsedCurrent = new URL(url.includes('://') ? url : 'https://' + url);
+    currentHost = parsedCurrent.hostname.toLowerCase();
+    currentPort = parsedCurrent.port || (parsedCurrent.protocol === 'https:' ? '443' : '80');
+    currentPath = parsedCurrent.pathname.replace(/\/+$/, '') || '/';
+  } catch (e) {}
+
   for (const item of (cachedVaultItems || [])) {
     if (item.item_type !== 'login') continue;
     try {
       const decrypted = await CryptoClient.decryptItem(item.encrypted_data, item.encryption_iv, vaultKeyHex);
       if (decrypted.url && DomainUtils.isUrlMatch(decrypted.url, url)) {
+        let rank = 3;
+        try {
+          const itemUrl = decrypted.url.includes('://') ? decrypted.url : 'https://' + decrypted.url;
+          const parsedItem = new URL(itemUrl);
+          const itemHost = parsedItem.hostname.toLowerCase();
+          const itemPort = parsedItem.port || (parsedItem.protocol === 'https:' ? '443' : '80');
+          const itemPath = parsedItem.pathname.replace(/\/+$/, '') || '/';
+
+          const baseCurrent = DomainUtils.getBaseDomain(url);
+          const baseItem = DomainUtils.getBaseDomain(decrypted.url);
+
+          if (itemHost === currentHost) {
+            if (itemPort === currentPort && (itemPath === '/' || currentPath === itemPath || currentPath.startsWith(itemPath + '/'))) {
+              rank = 1;
+            } else {
+              rank = 2;
+            }
+          } else if (baseItem === baseCurrent) {
+            rank = 2;
+          } else {
+            rank = 3;
+          }
+        } catch (e) {
+          rank = 3;
+        }
+
         matches.push({
           id: item.id,
           title: decrypted.title || 'Untitled',
           username: decrypted.username || decrypted.email || '',
-          url: decrypted.url || ''
+          url: decrypted.url || '',
+          rank: rank
         });
       }
     } catch (e) { /* skip items that fail to decrypt */ }
   }
+
+  matches.sort((a, b) => a.rank - b.rank);
+  matches.forEach(m => delete m.rank);
 
   updateBadge(matches.length);
   return { success: true, items: matches, count: matches.length };
@@ -538,7 +579,7 @@ async function decryptItem(id) {
   const vaultKeyHex = await Storage.getVaultKey();
   await ensureVaultItemsLoaded();
 
-  const item = cachedVaultItems.find(i => i.id === id);
+  const item = cachedVaultItems.find(i => String(i.id) === String(id));
   if (!item) throw new Error('Item not found');
 
   const decrypted = await CryptoClient.decryptItem(item.encrypted_data, item.encryption_iv, vaultKeyHex);
@@ -685,7 +726,7 @@ async function favoriteItem(id, isFavorite) {
   await ApiClient.updateVaultItem({ id, is_favorite: isFavorite ? 1 : 0 });
   // Update local cache
   if (cachedVaultItems) {
-    const item = cachedVaultItems.find(i => i.id === id);
+    const item = cachedVaultItems.find(i => String(i.id) === String(id));
     if (item) item.is_favorite = isFavorite ? 1 : 0;
     await Storage.setEncryptedVaultCache(cachedVaultItems);
   }
@@ -813,7 +854,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   // Pick the first match and decrypt
   const match = result.items[0];
   const vaultKeyHex = await Storage.getVaultKey();
-  const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+  const encItem = (cachedVaultItems || []).find(i => String(i.id) === String(match.id));
   if (!encItem) return;
 
   const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);
@@ -874,7 +915,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (result.success && result.count > 0) {
       const match = result.items[0];
       const vaultKeyHex = await Storage.getVaultKey();
-      const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+      const encItem = (cachedVaultItems || []).find(i => String(i.id) === String(match.id));
       if (encItem) {
         const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);
         chrome.tabs.sendMessage(tab.id, {
@@ -888,7 +929,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (idResult.success && idResult.items && idResult.items.length > 0) {
       const match = idResult.items[0];
       const vaultKeyHex = await Storage.getVaultKey();
-      const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+      const encItem = (cachedVaultItems || []).find(i => String(i.id) === String(match.id));
       if (encItem) {
         const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);
         chrome.tabs.sendMessage(tab.id, {
@@ -921,7 +962,7 @@ async function autofillPageLoad(payload) {
   // Exactly 1 match — decrypt and return for auto-fill
   const match = result.items[0];
   const vaultKeyHex = await Storage.getVaultKey();
-  const encItem = (cachedVaultItems || []).find(i => i.id === match.id);
+  const encItem = (cachedVaultItems || []).find(i => String(i.id) === String(match.id));
   if (!encItem) return { success: false };
 
   const decrypted = await CryptoClient.decryptItem(encItem.encrypted_data, encItem.encryption_iv, vaultKeyHex);

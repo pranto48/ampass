@@ -222,10 +222,10 @@
                 resolve({ action: 'update', existingItem: sameUserMatch });
               }
             } else {
-              resolve({ action: 'update', existingItem: sameUserMatch });
+              resolve({ action: 'none' });
             }
           }).catch(() => {
-            resolve({ action: 'update', existingItem: sameUserMatch });
+            resolve({ action: 'none' });
           });
         } else {
           resolve({ action: 'save' });
